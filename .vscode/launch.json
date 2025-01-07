@@ -1,0 +1,58 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Debug rpi_sound",
+        "type": "cppdbg",
+        "request": "launch",
+        "program": "${workspaceFolder}/build/RpiSound",
+        "args": [],
+        "stopAtEntry": false,
+        "cwd": "${workspaceFolder}",
+        "environment": [],
+        "externalConsole": false,
+        "MIMode": "gdb",
+        "setupCommands": [
+          {
+            "description": "Enable pretty-printing for gdb",
+            "text": "-enable-pretty-printing",
+            "ignoreFailures": true
+          }
+        ],
+        "miDebuggerPath": "/usr/bin/gdb",
+        "preLaunchTask": "CMake: Build",
+        "logging": {
+          "trace": true,
+          "engineLogging": false,
+          "programOutput": true
+        }
+      },
+      {
+        "name": "Debug play_wav",
+        "type": "cppdbg",
+        "request": "launch",
+        "program": "${workspaceFolder}/build/examples/play_wav",
+        "args": [],
+        "stopAtEntry": false,
+        "cwd": "${workspaceFolder}",
+        "environment": [],
+        "externalConsole": false,
+        "MIMode": "gdb",
+        "setupCommands": [
+          {
+            "description": "Enable pretty-printing for gdb",
+            "text": "-enable-pretty-printing",
+            "ignoreFailures": true
+          }
+        ],
+        "miDebuggerPath": "/usr/bin/gdb",
+        "preLaunchTask": "CMake: Build",
+        "logging": {
+          "trace": true,
+          "engineLogging": false,
+          "programOutput": true
+        }
+      }
+    ]
+  }
+  
