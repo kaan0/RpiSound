@@ -12,9 +12,6 @@ namespace {
     constexpr auto kFmtHeader = "fmt";
     constexpr auto kDataHeader = "data";
 
-    constexpr auto kSubFormatPCM = "\x01\x00\x00\x00\x10\x00\x80\x00\x00\xAA\x00\x38\x9B\x71";
-    constexpr auto kSubFormatIeeeFloat = "\x03\x00\x00\x00\x10\x00\x80\x00\x00\xAA\x00\x38\x9B\x71";
-
     struct WavHeader {
         char riff[4];
         uint32_t riffSize;
@@ -37,6 +34,8 @@ namespace {
         uint32_t dataSize;
     };
     struct ExtendedChunkFormat {
+        uint16_t subExtensionSize;
+        uint16_t validBitRate;
         uint32_t channelMask;
         char subFormat[16];
     };
@@ -52,7 +51,7 @@ namespace {
         kDRM = 9,
         kMpeg = 80,
         kMpegLayer3 = 85,
-        WaveFormatExtensible = 65534
+        kWaveFormatExtensible = 65534
     };
 }
 
@@ -89,19 +88,13 @@ bool WavParser::load(const std::string& filePath) {
         case WaveFormat::kPCM:
             break;
 
-        case WaveFormat::WaveFormatExtensible:
+        case WaveFormat::kWaveFormatExtensible:
             file.read(reinterpret_cast<char*>(&extendedChunkFormat), sizeof(extendedChunkFormat));
-            if (std::memcmp(extendedChunkFormat.subFormat,
-                            kSubFormatIeeeFloat,
-                            sizeof(kSubFormatIeeeFloat)) == 0) {
-                std::cout << "Extended float \r\n";
+            if(extendedChunkFormat.subFormat[0] == WaveFormat::kIeeeFloat) {
                 isFloat = true;
-            } else if (std::memcmp(extendedChunkFormat.subFormat,
-                            kSubFormatPCM,
-                            sizeof(kSubFormatPCM)) == 0) {
-                std::cout << "Extended PCM \r\n";
+            } else if(extendedChunkFormat.subFormat[0] == WaveFormat::kPCM) {
+
             } else {
-                std::cout << "Extended wrong \r\n";
                 return false;
             }
             break;
