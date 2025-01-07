@@ -8,7 +8,6 @@ class WavParserTest : public ::testing::Test {
 
 protected:
 
-
     void SetUp() override {
         testee_ = std::make_unique<WavParser>();
     }
@@ -16,7 +15,7 @@ protected:
     void TearDown() override {
 
     }
-std::unique_ptr<WavParser> testee_;
+    std::unique_ptr<WavParser> testee_;
 };
 
 TEST_F(WavParserTest, TestValidFile) {

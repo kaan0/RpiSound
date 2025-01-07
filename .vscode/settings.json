@@ -60,6 +60,11 @@
         "text_encoding": "cpp",
         "thread": "cpp",
         "typeinfo": "cpp",
-        "variant": "cpp"
+        "variant": "cpp",
+        "any": "cpp",
+        "condition_variable": "cpp",
+        "map": "cpp",
+        "set": "cpp",
+        "mutex": "cpp"
     }
 }
