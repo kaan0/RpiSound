@@ -1,30 +1,36 @@
 #include <string>
 
-#include "pcm_converter.hpp"
+#include "rpi_sound/pcm_converter.hpp"
+#include "rpi_sound/wav_parser.hpp"
 
-#include "wav_parser.hpp"
-
-PCMConverter::PCMConverter() {}
-
-bool PCMConverter::load(const std::string& filePath) {
+bool PCMConverter::load(const std::string_view& filePath) {
     if (filePath.ends_with(".wav")) {
         m_parser_ = std::make_unique<WavParser>();
-    } else if (filePath.ends_with(".mp3")) {
-        // m_parser_ = std::make_unique<Mp3Parser>();
     } else {
         return false; // Unsupported format
     }
-    return m_parser_->load(filePath);
+
+    if (!m_parser_->load(filePath)) {
+        return false;
+    }
+    // TODO: do this after conversion
+    converted_pcm_data_ = std::move(m_parser_->getPCMData());
+
+    return true;
 }
 
-std::vector<uint8_t> PCMConverter::getPCMData() const {
-    return {0};
+bool PCMConverter::convertToHwPCM(AudioFormat hwAudioFormat) {
+    if (hwAudioFormat == m_parser_->getAudioFormat()) {
+        // No need to do the conversion
+        converted_pcm_data_ = std::move(m_parser_->getPCMData());
+        return true;
+    }
+
+    return false;
 }
 
-int PCMConverter::getSampleRate() const {
-    return 0;
+std::shared_ptr<PCMData> PCMConverter::getData() const {
+    return converted_pcm_data_;
 }
 
-int PCMConverter::getChannels() const {
-    return 0;
-}
+

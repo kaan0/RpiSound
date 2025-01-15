@@ -3,21 +3,17 @@
 
 #include "iaudio_parser.hpp"
 
-
 class WavParser : public IAudioParser {
 public:
     WavParser();
     ~WavParser() override;
 
-    bool load(const std::string& filePath) override;
-    std::vector<uint8_t> getPCMData() const override;
-    int getSampleRate() const override;
-    int getChannels() const override;
+    bool load(const std::string_view& filePath) override;
+    std::shared_ptr<PCMData> getPCMData() const override;
+    AudioFormat getAudioFormat() const override;
 
 private:
-    std::vector<uint8_t> pcm_data_;
-    int sample_rate_ = 0;
-    int channels_ = 0;
+    std::shared_ptr<PCMData> pcm_data_;
 };
 
 #endif // _WAV_PARSER_HPP__

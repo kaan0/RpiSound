@@ -2,16 +2,18 @@
 #define _IAUDIO_PARSER_HPP__
 
 #include <cstdint>
-#include <string>
+#include <memory>
+#include <string_view>
 #include <vector>
+
+#include "audio_utils.hpp"
 
 class IAudioParser {
 public:
     virtual ~IAudioParser() = default;
-    virtual bool load(const std::string& filePath) = 0;
-    virtual std::vector<uint8_t> getPCMData() const = 0;
-    virtual int getSampleRate() const = 0;
-    virtual int getChannels() const = 0;
+    virtual bool load(const std::string_view& filePath) = 0;
+    virtual std::shared_ptr<PCMData> getPCMData() const = 0;
+    virtual AudioFormat getAudioFormat() const = 0;
 };
 
 #endif // _IAUDIO_PARSER_HPP__

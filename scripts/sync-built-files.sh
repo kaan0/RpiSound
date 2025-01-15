@@ -36,15 +36,4 @@ get_target_config
 # Decode the password
 TARGET_PASSWORD=$(decode_password)
 
-# Ensure local directories exist
-mkdir -p ~/target-sysroot/lib
-mkdir -p ~/target-sysroot/usr
-mkdir -p ~/target-sysroot/opt
-
-# Sync directories
-rsync -avz --rsync-path="sudo rsync" \
-    $TARGET_USERNAME@$TARGET_IP:/lib/ ~/target-sysroot/lib/
-rsync -avz --rsync-path="sudo rsync" \
-    $TARGET_USERNAME@$TARGET_IP:/usr/ ~/target-sysroot/usr/
-rsync -avz --rsync-path="sudo rsync" \
-    $TARGET_USERNAME@$TARGET_IP:/opt/ ~/target-sysroot/opt/
+rsync -avz --delete --mkpath --rsync-path="sudo rsync" ../build/ $TARGET_USERNAME@$TARGET_IP:/home/$USER/RpiSound/build/

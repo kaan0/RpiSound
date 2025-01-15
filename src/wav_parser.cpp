@@ -7,10 +7,10 @@
 #include "rpi_sound/wav_parser.hpp"
 
 namespace {
-    constexpr auto kRiffHeader = "RIFF";
-    constexpr auto kWaveHeader = "WAVE";
-    constexpr auto kFmtHeader = "fmt";
-    constexpr auto kDataHeader = "data";
+    constexpr char kRiffHeader[] = "RIFF";
+    constexpr char kWaveHeader[] = "WAVE";
+    constexpr char kFmtHeader[] = "fmt";
+    constexpr char kDataHeader[] = "data";
 
     struct WavHeader {
         char riff[4];
@@ -63,8 +63,8 @@ WavParser::~WavParser() {
     
 }
 
-bool WavParser::load(const std::string& filePath) {
-    std::ifstream file{filePath, std::ios::binary};
+bool WavParser::load(const std::string_view& filePath) {
+    std::ifstream file(filePath.data(), std::ios::binary);
     if (!file.good()) {
         std::cout << "File open failed!" << filePath << "\r\n";
         return false;
@@ -82,39 +82,68 @@ bool WavParser::load(const std::string& filePath) {
     ChunkFormat chunkFormat;
     file.read(reinterpret_cast<char*>(&chunkFormat), sizeof(chunkFormat));
 
-    auto isFloat = false;
-    ExtendedChunkFormat extendedChunkFormat;
     switch (chunkFormat.audioFormat) {
-        case WaveFormat::kPCM:
-            break;
-
         case WaveFormat::kWaveFormatExtensible:
-            file.read(reinterpret_cast<char*>(&extendedChunkFormat), sizeof(extendedChunkFormat));
-            if(extendedChunkFormat.subFormat[0] == WaveFormat::kIeeeFloat) {
-                isFloat = true;
-            } else if(extendedChunkFormat.subFormat[0] == WaveFormat::kPCM) {
+            ExtendedChunkFormat extendedChunkFormat;
 
+            file.read(reinterpret_cast<char*>(&extendedChunkFormat), sizeof(extendedChunkFormat));
+
+            if((extendedChunkFormat.subFormat[0] == WaveFormat::kIeeeFloat) ||
+                extendedChunkFormat.subFormat[0] == WaveFormat::kPCM) {
+                chunkFormat.audioFormat = static_cast<WaveFormat>(extendedChunkFormat.subFormat[0]);
             } else {
+                std::cout << "Unknown format\r\n";
                 return false;
             }
+            break;
+
+        case WaveFormat::kPCM:
+        case WaveFormat::kIeeeFloat:
             break;
 
         default:
             return false;
     }
 
-    // TODO: implement wav loader
-    return false;
+    DataHeader dataHeader;
+    constexpr auto header_size = std::size(dataHeader.data);
+    do {
+        file.read(reinterpret_cast<char*>(&dataHeader), sizeof(dataHeader));
+        if (std::memcmp(dataHeader.data, kDataHeader, header_size) == 0) {
+            break;
+        }
+        file.seekg(-(sizeof(dataHeader) - 1), std::ios::cur);
+    } while(file.peek() != std::ifstream::traits_type::eof());
+
+    auto currentPos = file.tellg();
+    file.seekg(currentPos, std::ios::end);
+    auto endPos = file.tellg();
+    file.seekg(currentPos, std::ios::beg);
+    if (dataHeader.dataSize > (endPos - currentPos)) {
+        std::cout << "Reported: " << dataHeader.dataSize << " Actual: " << (endPos - currentPos);
+        return false;
+    }
+
+    auto format = AudioFormat(chunkFormat.sampleRate,
+                              chunkFormat.numChannels,
+                              chunkFormat.audioFormat == WaveFormat::kIeeeFloat,
+                              chunkFormat.bitsPerSample);
+
+    pcm_data_ = std::make_shared<PCMData>();
+    pcm_data_->data = std::vector<uint8_t>(dataHeader.dataSize);
+    pcm_data_->format = format;
+
+    if(!file.read(reinterpret_cast<char*>(pcm_data_->data.data()), dataHeader.dataSize)) {
+        return false;
+    }
+
+    return true;
 }
 
-std::vector<uint8_t> WavParser::getPCMData() const {
+std::shared_ptr<PCMData> WavParser::getPCMData() const {
     return pcm_data_;
 }
 
-int WavParser::getSampleRate() const {
-    return sample_rate_;
-}
-
-int WavParser::getChannels() const {
-    return channels_;
+AudioFormat WavParser::getAudioFormat() const {
+    return pcm_data_->format;
 }

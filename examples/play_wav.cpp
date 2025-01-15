@@ -1,21 +1,21 @@
 #include <iostream>
+#include <span>
 
-#include "rpi_sound/wav_parser.hpp"
-// #include "rpi_sound/pcm_player.h"
+#include "rpi_sound/player.hpp"
 
-int main() {
-    
-    WavParser parser;
-    if (!parser.load("pcm3244s.wav")) {
-        std::cerr << "Invalid WAV file.\n";
-        return 1;
+int main(int argc, char* argv[]) {
+
+    std::span<char*> args(argv, argc);
+    if (args.size() < 2) {
+        std::cout << "no files provided.\r\n";
+        return -1;
     }
-    #if 0
-    PCMPlayer player;
-    if (!player.play(parser.getPCMData())) {
-        std::cerr << "Failed to play audio.\n";
-        return 1;
+
+    Player player;
+    if (!player.play(args[1])) {
+        std::cout << "Playing failed!\r\n";
+        return -1;
     }
-    #endif
+
     return 0;
 }
