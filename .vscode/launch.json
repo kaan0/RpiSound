@@ -32,7 +32,7 @@
         "type": "cppdbg",
         "request": "launch",
         "program": "${workspaceFolder}/build/examples/play_wav",
-        "args": [],
+        "args": ["output.wav"],
         "stopAtEntry": false,
         "cwd": "${workspaceFolder}/build/examples/",
         "environment": [],
@@ -78,7 +78,47 @@
           "engineLogging": false,
           "programOutput": true
         },
-      }
+      },
+      {
+        "name": "Remote debug play_wav",
+        "type": "cppdbg",
+        "request": "launch",
+        "program": "${workspaceFolder}/build/examples/play_wav",
+        "args": [],
+        "stopAtEntry": true,
+        "cwd": "${workspaceFolder}",
+        "environment": [],
+        "externalConsole": true,
+        "targetArchitecture": "arm64",
+        "MIMode": "gdb",
+        "setupCommands": [
+            {
+                "description": "Enable pretty-printing for gdb",
+                "text": "-enable-pretty-printing",
+                "ignoreFailures": true
+            },
+            {
+                "description": "set sysroot",
+                "text": "set sysroot ~/target-sysroot",
+                "ignoreFailures": false
+            }
+        ],
+        "miDebuggerServerAddress": "${input:remoteIp}:3333",
+        "miDebuggerPath": "/usr/bin/gdb-multiarch",
+        // "preLaunchTask": "start_debug",
+        // "postDebugTask": "postdebug"
+    }
+    ],
+    "inputs": [
+        {
+            "id": "remoteIp",
+            "type": "command",
+            "command": "extension.commandvariable.file.content",
+            "args": {
+                "fileName": "${workspaceFolder}/scripts/.target",
+                "key": "TARGET_IP"
+            }
+        }
     ]
   }
   
