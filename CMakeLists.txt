@@ -71,7 +71,9 @@ target_link_libraries(RpiSoundLib PRIVATE tinyalsa pthread)
 
 if(BUILD_TESTS)
     enable_testing()
-    add_subdirectory(tests)
+    if(NOT BUILD_FOR_AARCH64)
+        add_subdirectory(tests)
+    endif()
 endif()
 
 if(BUILD_EXAMPLES)
