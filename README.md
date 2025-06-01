@@ -27,6 +27,12 @@
 
 ---
 
+## TODO:
+- Sound manager implementation with randomization for realistic experience.
+- Sound loader interface to mmap the sound files.
+
+---
+
 ## Build Instructions
 
 ### Prerequisites
@@ -65,3 +71,7 @@ mkdir -p build_aarch64 && cd build_aarch64
 cmake .. -DBUILD_FOR_AARCH64=ON
 make -j
 ```
+
+ffplay.exe -autoexit -skip_initial_bytes 47 -f s16le -ch_layout stereo -ar 44100 \\wsl.localhost\Ubuntu\home\kaan\dev\RpiSound\sound\demo\tom_low\tom_low_0.pcm
+
+ffprobe -v error -show_format -show_streams -print_format json
