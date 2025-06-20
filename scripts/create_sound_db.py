@@ -3,7 +3,7 @@ from pathlib import Path
 from pydub import AudioSegment
 
 # --- Settings ---
-root_dir = Path("../sound")  # set to your root directory
+root_dir = Path("../sound")
 
 def process_folder(folder):
     parent = folder.name.lower().replace(" ", "_")
@@ -22,6 +22,7 @@ def process_folder(folder):
             channels = audio.channels
 
             # Create metadata
+            # TODO: make metadata size constant
             metadata = b"|".join([
                 f"name:{outname_pcm}".encode(),
                 b"samplerate:44100",

@@ -16,6 +16,8 @@ RUN apt-get update && apt-get install -y \
     python3-numpy \
     gcc-aarch64-linux-gnu \
     g++-aarch64-linux-gnu \
+    clang-format \
+    cppcheck \
     && apt-get clean
 
 # Set gcc-12/g++-12 as default

@@ -1,6 +1,6 @@
 # RpiSound (Draft)
 
-**RpiSound** is a lightweight audio playback library intended for embedded Linux systems, with a focus on Raspberry Pi and USB sound cards. The library is designed to support asynchronous WAV playback with low-latency audio output.
+**RpiSound** is a lightweight audio playback library intended for embedded Linux systems, with a focus on Raspberry Pi and USB sound cards. The library is designed to support asynchronous PCM playback with low-latency audio output.
 
 > 🚧 **This project is under active development and not yet production-ready.**
 
@@ -72,6 +72,11 @@ cmake .. -DBUILD_FOR_AARCH64=ON
 make -j
 ```
 
-ffplay.exe -autoexit -skip_initial_bytes 47 -f s16le -ch_layout stereo -ar 44100 \\wsl.localhost\Ubuntu\home\kaan\dev\RpiSound\sound\demo\tom_low\tom_low_0.pcm
+### Useful commands
+```bash
+# play raw PCM data with ffplay
+ffplay -autoexit -skip_initial_bytes 47 -f s16le -ch_layout stereo -ar 44100 ./sound/demo/tom_low/tom_low_0.pcm
 
-ffprobe -v error -show_format -show_streams -print_format json
+# get file format details with ffprobe
+ffprobe -v error -show_format -show_streams -print_format json ./sound/demo/tom_low/tom_low_0.pcm
+```
