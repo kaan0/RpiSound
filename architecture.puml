@@ -1,8 +1,8 @@
 @startuml
 ' ====== Interfaces ======
 interface ISoundLoader {
-    +load(path: std::string): bool
-    +getSample(name: std::string): SoundSample*
+    +load(filePath: std::string): bool
+    +getSample(name: std::string_view): SoundSample&
 }
 
 interface ISoundManager {
@@ -13,8 +13,8 @@ interface ISoundManager {
 interface IAudioDevice {
     +open(deviceName: std::string): bool
     +close()
-    +write(data: void*, numBytes: size_t): bool
-    +getInfo(): std::string
+    +write(span<const types::audio_t> samples): bool
+    +getDevices(): std::vector<std::string>
 }
 
 interface IMidiInputHandler {
@@ -22,33 +22,32 @@ interface IMidiInputHandler {
 }
 
 interface IEffect {
-    +process(samples: int16_t*, numFrames: size_t, numChannels: size_t)
+    +process(samples: span<audio_t>, channels: size_t, frames: size_t)
 }
 
 ' ====== Concrete Classes ======
 class PCMLoader implements ISoundLoader {
-    - mmapFile(path: std::string)
-    - samples: std::unordered_map<std::string, SoundSample>
+    -mmapFile(path: std::string)
+    -samples: std::unordered_map<std::string, SoundSample>
 }
 
 class SoundSample {
-    +data: int16_t*
-    +length: size_t
+    +data: vector<audio_t>
     +metadata: Metadata
 }
 
 class SoundManager implements ISoundManager, IMidiInputHandler {
-    - loader: ISoundLoader*
-    - audioDevice: IAudioDevice*
-    - effectChain: EffectChain
-    - ringBuffer: RingBuffer
+    -loader: ISoundLoader*
+    -audioDevice: IAudioDevice*
+    -effectChain: EffectChain
+    -ringBuffer: RingBuffer
     +triggerSound(sampleName: std::string, velocity: int)
     +setInstrument(instrumentType: std::string)
     +onMidiEvent(event: MidiEvent)
 }
 
 class AudioDevice implements IAudioDevice {
-    - deviceId: int
+    -deviceId: int
     +open(deviceName: std::string): bool
     +close()
     +write(data: void*, numBytes: size_t): bool
@@ -56,41 +55,41 @@ class AudioDevice implements IAudioDevice {
 }
 
 class EffectChain {
-    - effects: std::vector<IEffect*>
+    -effects: std::vector<IEffect*>
     +addEffect(effect: IEffect*)
-    +process(samples: int16_t*, numFrames: size_t, numChannels: size_t)
+    +process(samples: span<audio_t>, channels: size_t, frames: size_t)
 }
 
 class BalanceEffect implements IEffect {
-    - balance: float
+    -balance: float
     +setBalance(balance: float)
-    +process(samples: int16_t*, numFrames: size_t, numChannels: size_t)
+    +process(samples: span<audio_t>, channels: size_t, frames: size_t)
 }
 
 class ReverbEffect implements IEffect {
-    - params: ReverbParams
+    -params: ReverbParams
     +setParams(params: ReverbParams)
-    +process(samples: int16_t*, numFrames: size_t, numChannels: size_t)
+    +process(samples: span<audio_t>, channels: size_t, frames: size_t)
 }
 
 class RingBuffer {
-    - buffer: int16_t[]
-    - size: size_t
+    -buffer: int16_t[]
+    -size: size_t
     +write(data: int16_t*, n: size_t): bool
     +read(data: int16_t*, n: size_t): bool
 }
 
 class Metadata {
-    +instrument: std::string
-    +genre: std::string
-    +length: float
-    +description: std::string
+    +name       : std::string
+    +sampleRate : uint32_t
+    +frames     : size_t
+    +channels   : uint16_t
 }
 
 class MidiEvent {
-    +type: int
-    +note: int
-    +velocity: int
+    +type     : int
+    +note     : int
+    +velocity : int
 }
 
 ' ====== Relationships ======

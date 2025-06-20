@@ -67,6 +67,7 @@
         "set": "cpp",
         "mutex": "cpp",
         "bitset": "cpp",
-        "regex": "cpp"
+        "regex": "cpp",
+        "cinttypes": "cpp"
     }
 }
