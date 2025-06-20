@@ -5,10 +5,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_BUILD_TYPE Debug)
 
-option(BUILD_FOR_AARCH64 "Cross compile for RaspberryPi" OFF)
+option(BUILD_FOR_AARCH64 "Cross compile for aarch64" OFF)
 option(BUILD_EXAMPLES "Build examples" ON)
 option(BUILD_TESTS "Build tests" ON)
 option(ENABLE_CPPCHECK "Run CPP check" OFF)
+option(ENABLE_CLANG_FORMAT "Run Clang format" OFF)
 
 if(BUILD_FOR_AARCH64)
     set(CMAKE_TOOLCHAIN_FILE "${CMAKE_SOURCE_DIR}/cmake/toolchain-aarch64.cmake")
@@ -80,25 +81,10 @@ if(BUILD_EXAMPLES)
     add_subdirectory(examples)
 endif()
 
-if(ENABLE_CPPCHECK)
-    find_program(CPPCHECK cppcheck)
+if(ENABLE_CLANG_FORMAT)
+    include(cmake/clang-format.cmake)
 endif()
 
-if(CPPCHECK)
-    add_custom_target(cppcheck
-        COMMAND cppcheck --enable=all
-                         --std=c++20
-                         --project=${CMAKE_BINARY_DIR}/compile_commands.json
-                         -I/usr/include/c++/14
-                         -I/usr/include/x86_64-linux-gnu/c++/14
-                         -I/usr/include/c++/14/backward
-                         -I/usr/lib/gcc/x86_64-linux-gnu/14/include
-                         -I/usr/local/include
-                         -I/usr/include/x86_64-linux-gnu
-                         -I/usr/include
-        COMMENT "Running cppcheck..."
-        VERBATIM
-    )
-    # Add cppcheck to the default build
-    add_custom_target(run_cppcheck ALL DEPENDS cppcheck)
+if(ENABLE_CPPCHECK)
+    include(cmake/cppcheck.cmake)
 endif()
