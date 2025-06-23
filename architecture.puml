@@ -2,7 +2,7 @@
 ' ====== Interfaces ======
 interface ISoundLoader {
     +load(filePath: std::string): bool
-    +getSample(name: std::string_view): SoundSample&
+    +getSample(name: std::string_view): types::SoundSample&
 }
 
 interface ISoundManager {
@@ -11,10 +11,20 @@ interface ISoundManager {
 }
 
 interface IAudioDevice {
-    +open(deviceName: std::string): bool
+    +open(deviceInfo: types::AudioDeviceInfo&, isCapture: bool): bool
     +close()
-    +write(span<const types::audio_t> samples): bool
-    +getDevices(): std::vector<std::string>
+    +isOpen(): bool
+    +write(audioData: types::audio_span_t): bool
+    +read(audioBuffer: types::audio_span_mut_t, framesToRead: size_t): bool
+    +getBufferSize(): size_t
+    +getAvailableFrames(): size_t
+    +getLastError(): std::string
+}
+
+interface AlsaDriver {
+    +pcmOpen(card: uint32_t, device: uint32_t, flags: uint32_t, config: PcmConfig*): PcmHandle*
+    +pcmClose(pcm: PcmHandle*): int
+    +pcmWrite(pcm: PcmHandle*, data: void*, count: size_t): int
 }
 
 interface IMidiInputHandler {
@@ -22,18 +32,72 @@ interface IMidiInputHandler {
 }
 
 interface IEffect {
-    +process(samples: span<audio_t>, channels: size_t, frames: size_t)
+    +process(samples: types::audio_span_mut_t, channels: size_t)
+}
+
+' ====== Types Namespace ======
+namespace types {
+    ' Type aliases
+    class "audio_t" as audio_t << (T,lightblue) typedef >> {
+        using audio_t = int16_t
+        using audio_span_t = std::span<const audio_t>
+        using audio_span_mut_t = std::span<audio_t>
+    }
+    
+    class SoundSample {
+        +audioData: vector<audio_t>
+        +metadata: Metadata
+        +getAudioSpan(): audio_span_t
+        +getAudioSpanMut(): audio_span_mut_t
+    }
+
+    class Metadata {
+        +name: std::string
+        +sampleRate: uint32_t
+        +frames: size_t
+        +channels: uint16_t
+    }
+
+    class MidiEvent {
+        +type: int
+        +note: int
+        +velocity: int
+    }
+
+    class DeviceFormat {
+        +SampleFormat: enum
+        +periodSize: uint32_t
+        +periodCount: uint32_t
+        +startTreshold: uint32_t
+        +stopTreshold: uint32_t
+        +silenceTreshold: uint32_t
+        +silenceSize: uint32_t
+        +channelCount: uint32_t
+        +sampleRate: uint32_t
+        +sampleFormat: SampleFormat
+    }
+
+    class AudioDeviceInfo {
+        +format: DeviceFormat
+        +DeviceType: enum
+        +cardId: int32_t
+        +deviceId: int32_t
+        +type: DeviceType
+        +driver: std::string
+        +description: std::string
+    }
+
+    SoundSample --> audio_t
+    SoundSample --> Metadata
+    AudioDeviceInfo --> DeviceFormat
 }
 
 ' ====== Concrete Classes ======
 class PCMLoader implements ISoundLoader {
-    -mmapFile(path: std::string)
-    -samples: std::unordered_map<std::string, SoundSample>
-}
-
-class SoundSample {
-    +data: vector<audio_t>
-    +metadata: Metadata
+    -mmapFile(filePath: std::string): bool
+    -samples: std::unordered_map<std::string, types::SoundSample>
+    +load(filePath: std::string): bool
+    +getSample(name: std::string_view): types::SoundSample&
 }
 
 class SoundManager implements ISoundManager, IMidiInputHandler {
@@ -43,33 +107,41 @@ class SoundManager implements ISoundManager, IMidiInputHandler {
     -ringBuffer: RingBuffer
     +triggerSound(sampleName: std::string, velocity: int)
     +setInstrument(instrumentType: std::string)
-    +onMidiEvent(event: MidiEvent)
+    +onMidiEvent(event: types::MidiEvent)
 }
 
 class AudioDevice implements IAudioDevice {
-    -deviceId: int
-    +open(deviceName: std::string): bool
+    -m_alsaDriver: std::shared_ptr<AlsaDriver>
+    -m_pcmHandle: AlsaDriver::PcmHandle*
+    -m_deviceInfo: types::AudioDeviceInfo
+    -m_lastError: std::string
+    +AudioDevice(driver: std::shared_ptr<AlsaDriver>)
+    +open(deviceInfo: types::AudioDeviceInfo&, isCapture: bool): bool
     +close()
-    +write(data: void*, numBytes: size_t): bool
-    +getInfo(): std::string
+    +isOpen(): bool
+    +write(audioData: types::audio_span_t): bool
+    +read(audioBuffer: types::audio_span_mut_t, framesToRead: size_t): bool
+    +getBufferSize(): size_t
+    +getAvailableFrames(): size_t
+    +getLastError(): std::string
 }
 
 class EffectChain {
     -effects: std::vector<IEffect*>
     +addEffect(effect: IEffect*)
-    +process(samples: span<audio_t>, channels: size_t, frames: size_t)
+    +process(samples: types::audio_span_mut_t, channels: size_t)
 }
 
 class BalanceEffect implements IEffect {
     -balance: float
     +setBalance(balance: float)
-    +process(samples: span<audio_t>, channels: size_t, frames: size_t)
+    +process(samples: types::audio_span_mut_t, channels: size_t)
 }
 
 class ReverbEffect implements IEffect {
     -params: ReverbParams
     +setParams(params: ReverbParams)
-    +process(samples: span<audio_t>, channels: size_t, frames: size_t)
+    +process(samples: types::audio_span_mut_t, channels: size_t)
 }
 
 class RingBuffer {
@@ -79,26 +151,11 @@ class RingBuffer {
     +read(data: int16_t*, n: size_t): bool
 }
 
-class Metadata {
-    +name       : std::string
-    +sampleRate : uint32_t
-    +frames     : size_t
-    +channels   : uint16_t
-}
-
-class MidiEvent {
-    +type     : int
-    +note     : int
-    +velocity : int
-}
-
 ' ====== Relationships ======
 SoundManager --> ISoundLoader
 SoundManager --> IAudioDevice
 SoundManager --> EffectChain
 SoundManager --> RingBuffer
 EffectChain --> IEffect
-ISoundLoader --> SoundSample
-SoundSample --> Metadata
-SoundManager ..> MidiEvent
+AudioDevice --> AlsaDriver : <<uses>>
 @enduml

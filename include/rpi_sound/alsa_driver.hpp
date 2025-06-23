@@ -6,8 +6,33 @@ extern "C" {
 
 #include <cstdint>
 
+/**
+ * @class AlsaDriver
+ * @brief Wrapper for TinyALSA functionality providing audio hardware access
+ * 
+ * This class provides a C++ interface to the TinyALSA library's C functions,
+ * making them more accessible to the rest of the application while enabling
+ * testing through dependency injection.
+ */
 class AlsaDriver {
 public:
+    using PcmHandle = struct pcm;
+    using PcmConfig = struct pcm_config;
+    using PcmParams = struct pcm_params;
+    using PcmMask = struct pcm_mask;
+    using PcmParam = enum pcm_param;
+    using PcmFormat = enum pcm_format;
+    using Flags = uint32_t;
+
+    static constexpr PcmFormat kFormatInvalid = PCM_FORMAT_INVALID;
+    static constexpr PcmFormat kFormatS16LE = PCM_FORMAT_S16_LE;
+    static constexpr PcmFormat kFormatS32LE = PCM_FORMAT_S32_LE;
+    static constexpr PcmFormat kFormatFloatLE = PCM_FORMAT_FLOAT_LE;
+
+    static constexpr Flags kPlayback = PCM_OUT;
+    static constexpr Flags kCapture = PCM_IN;
+    static constexpr Flags kNonBlock = PCM_NONBLOCK;
+
     AlsaDriver() = default;
     virtual ~AlsaDriver() = default;
 
@@ -15,23 +40,41 @@ public:
     AlsaDriver(const AlsaDriver&) = delete;
     AlsaDriver& operator=(const AlsaDriver&) = delete;
 
-    // Interface methods that wrap tinyalsa functions
-    virtual struct pcm* pcmOpen(uint32_t card, uint32_t device, uint32_t flags, const struct pcm_config* config);
+    /**
+     * @brief Open a PCM device for playback or capture
+     * 
+     * @param card Card number of the PCM device
+     * @param device Device number of the PCM device
+     * @param flags Flags controlling device opening
+     * @param config Configuration for the PCM device
+     * @return PcmHandle* Handle to the opened PCM device, or nullptr on failure
+     */
+    virtual PcmHandle* pcmOpen(uint32_t card, uint32_t device, uint32_t flags, const PcmConfig* config);
 
-    virtual int pcmClose(struct pcm* pcm);
+    virtual int pcmClose(PcmHandle* pcm);
 
-    virtual int pcmWait(struct pcm* pcm, int timeoutMs);
+    virtual int pcmWait(PcmHandle* pcm, int timeoutMs);
 
-    virtual int pcmWrite(struct pcm* pcm, const void* data, uint32_t count);
+    virtual int pcmWrite(PcmHandle* pcm, const void* data, uint32_t count);
 
-    virtual int pcmRead(struct pcm* pcm, void* data, uint32_t count);
+    virtual int pcmRead(PcmHandle* pcm, void* data, uint32_t count);
 
-    virtual int pcmIsReady(const struct pcm* pcm);
+    virtual int pcmIsReady(const PcmHandle* pcm);
 
-    virtual const char* pcmGetError(const struct pcm* pcm);
+    virtual const char* pcmGetError(const PcmHandle* pcm);
 
     // Additional utility methods
-    virtual int pcmGetBufferSize(const struct pcm* pcm);
+    virtual const PcmMask* pcmParamsGetMask(const PcmParams* params, PcmParam param);
 
-    virtual int get_available_frames(const struct pcm* pcm);
+    virtual PcmParams* pcmParamsGet(uint32_t card, uint32_t device, Flags flags);
+
+    virtual uint32_t pcmParamsGetMax(const PcmParams* params, PcmParam param);
+
+    virtual uint32_t pcmParamsGetMin(const PcmParams* params, PcmParam param);
+
+    virtual uint32_t pcmFramesToBytes(const PcmHandle* pcm, uint32_t frames);
+
+    virtual uint32_t pcmBytesToFrames(const PcmHandle* pcm, uint32_t frames);
+
+    virtual void pcmParamsFree(PcmParams* params);
 };

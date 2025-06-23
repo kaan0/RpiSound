@@ -15,26 +15,24 @@ def process_folder(folder):
             outname_wav = f"{parent}_{idx}.wav"
             outpath_wav = folder / outname_wav
 
-            # Get channel info before creating metadata
             audio = AudioSegment.from_file(file)
+            audio = audio.set_channels(2).set_sample_width(2).set_frame_rate(44100)
+
             print(f"Processing {file} -> {outpath_pcm}")
             print(f"  Channels: {audio.channels}, Sample Width: {audio.sample_width}, Frame Rate: {audio.frame_rate}")
-            channels = audio.channels
 
             # Create metadata
-            # TODO: make metadata size constant
             metadata = b"|".join([
                 f"name:{outname_pcm}".encode(),
                 b"samplerate:44100",
-                f"channels:{channels}".encode()
-            ]) + b"\n"
+                f"channels:{audio.channels}".encode(),
+                f"samplewidth:{audio.sample_width}".encode(),
+                f"frames:{int(audio.frame_count())}".encode(),
+            ]) + b"PCM DATA"
 
-            # Now convert and write file
-            audio = audio.set_channels(2).set_sample_width(2).set_frame_rate(44100)
-            raw_data = audio.raw_data
             with open(outpath_pcm, "wb") as f:
                 f.write(metadata)
-                f.write(raw_data)
+                f.write(audio.raw_data)
             with open(outpath_wav, "wb") as f:
                 f.write(audio.export(format="wav").read())
 
