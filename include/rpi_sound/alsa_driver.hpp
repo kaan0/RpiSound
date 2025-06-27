@@ -24,6 +24,12 @@ public:
     using PcmFormat = enum pcm_format;
     using Flags = uint32_t;
 
+    static constexpr PcmParam kParamFormat = PCM_PARAM_FORMAT;
+    static constexpr PcmParam kParamChannels = PCM_PARAM_CHANNELS;
+    static constexpr PcmParam kParamRate = PCM_PARAM_RATE;
+    static constexpr PcmParam kParamPeriodSize = PCM_PARAM_PERIOD_SIZE;
+    static constexpr PcmParam kParamPeriodCount = PCM_PARAM_PERIODS;
+
     static constexpr PcmFormat kFormatInvalid = PCM_FORMAT_INVALID;
     static constexpr PcmFormat kFormatS16LE = PCM_FORMAT_S16_LE;
     static constexpr PcmFormat kFormatS32LE = PCM_FORMAT_S32_LE;

@@ -15,7 +15,7 @@ int AlsaDriver::pcmWait(PcmHandle* pcm, int timeoutMs) {
 }
 
 int AlsaDriver::pcmWrite(PcmHandle* pcm, const void* data, uint32_t count) {
-    return pcm_write(pcm, data, count);
+    return pcm_writei(pcm, data, count);
 }
 
 int AlsaDriver::pcmRead(PcmHandle* pcm, void* data, uint32_t count) {

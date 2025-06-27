@@ -19,9 +19,10 @@ public:
     AudioDevice& operator=(AudioDevice&&) noexcept;
 
     // Device operations
-    bool open(const types::AudioDeviceInfo& deviceInfo, bool isCapture = false) override;
+    bool open(const types::AudioDeviceInfo& deviceInfo) override;
     void close() override;
     bool isOpen() const override;
+    types::AudioDeviceInfo getDeviceInfo() const override { return m_deviceInfo; }
 
     // Audio operations
     bool write(const types::audio_span_t& audioData) override;
@@ -34,8 +35,6 @@ public:
 
 private:
     AlsaDriver::PcmConfig createPcmConfig(const types::AudioDeviceInfo::DeviceFormat& format) const;
-    const types::AudioDeviceInfo::DeviceFormat& getDefaultDeviceFormat() const;
-    uint32_t getFlags(bool isCapture) const;
 
     std::shared_ptr<AlsaDriver> m_alsaDriver;
     AlsaDriver::PcmHandle* m_pcmHandle = nullptr;

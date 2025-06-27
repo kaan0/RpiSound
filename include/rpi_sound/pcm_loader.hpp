@@ -27,9 +27,9 @@ public:
     ~PcmLoader() override = default;
 
 private:
-    // Map to store loaded sound samples by file path
-    std::unordered_map<std::string_view, types::SoundSample> m_samples;
-
     // Load a sound sample from the specified file path
     bool parseSample(const std::filesystem::path& filePath, types::SoundSample& sample) const;
+
+    // Map to store loaded sound samples by file path
+    std::unordered_map<std::string_view, types::SoundSample> m_samples;
 };

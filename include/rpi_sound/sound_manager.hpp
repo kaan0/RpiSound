@@ -8,18 +8,20 @@
 
 class SoundManager : public ISoundManager {
 public:
+    static constexpr const char* kDefaultInstrumentType = "demo";
+
     // Constructor that initializes the sound loader and audio device
     SoundManager(std::unique_ptr<ISoundLoader> soundLoader, std::unique_ptr<IAudioDevice> audioDevice)
         : m_soundLoader(std::move(soundLoader)), m_audioDevice(std::move(audioDevice)) {}
+
+    // Destructor
+    ~SoundManager() override = default;
 
     // Load sound samples from the specified instrument folder
     bool load(const std::string_view instrumentType) override;
 
     // Trigger a sound sample by name
     bool triggerSound(const std::string_view sampleName, uint32_t velocity) override;
-
-    // Destructor
-    ~SoundManager() override = default;
 
 private:
     // Pointer to the sound loader instance

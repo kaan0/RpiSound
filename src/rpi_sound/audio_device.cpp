@@ -1,3 +1,6 @@
+#include <iostream>
+#include <numeric>
+
 #include "rpi_sound/audio_device.hpp"
 
 AudioDevice::AudioDevice(std::shared_ptr<AlsaDriver> alsaDriver) : m_alsaDriver(std::move(alsaDriver)) {}
@@ -29,9 +32,9 @@ AudioDevice& AudioDevice::operator=(AudioDevice&& other) noexcept {
     return *this;
 }
 
-bool AudioDevice::open(const types::AudioDeviceInfo& deviceInfo, bool isCapture) {
+bool AudioDevice::open(const types::AudioDeviceInfo& deviceInfo) {
     auto config{createPcmConfig(deviceInfo.format)};
-    m_pcmHandle = m_alsaDriver->pcmOpen(deviceInfo.cardId, deviceInfo.deviceId, getFlags(isCapture), &config);
+    m_pcmHandle = m_alsaDriver->pcmOpen(deviceInfo.cardId, deviceInfo.deviceId, deviceInfo.type, &config);
     if (!m_pcmHandle) {
         m_lastError = m_alsaDriver->pcmGetError(m_pcmHandle);
         return false;
@@ -89,37 +92,15 @@ std::string AudioDevice::getLastError() const {
 }
 
 AlsaDriver::PcmConfig AudioDevice::createPcmConfig(const types::AudioDeviceInfo::DeviceFormat& format) const {
-    static AlsaDriver::PcmConfig config{.channels = format.channelCount,
-                                        .rate = format.sampleRate,
-                                        .period_size = format.periodSize,
-                                        .period_count = format.periodCount,
-                                        .format = static_cast<AlsaDriver::PcmFormat>(format.sampleFormat),
-                                        .start_threshold = format.startTreshold,
-                                        .stop_threshold = format.stopTreshold,
-                                        .silence_threshold = format.silenceTreshold,
-                                        .silence_size = format.silenceSize,
-                                        .avail_min = 0};
+    AlsaDriver::PcmConfig config{.channels = format.channelCount,
+                                 .rate = format.sampleRate,
+                                 .period_size = format.periodSize,
+                                 .period_count = format.periodCount,
+                                 .format = static_cast<AlsaDriver::PcmFormat>(format.sampleFormat),
+                                 .start_threshold = format.startTreshold,
+                                 .stop_threshold = format.stopTreshold,
+                                 .silence_threshold = format.silenceTreshold,
+                                 .silence_size = format.silenceSize,
+                                 .avail_min = 0};
     return config;
-}
-
-const types::AudioDeviceInfo::DeviceFormat& AudioDevice::getDefaultDeviceFormat() const {
-    static types::AudioDeviceInfo::DeviceFormat defaultFormat{
-        .periodSize = 1024,
-        .periodCount = 2,
-        .startTreshold = 1024 * 2,  // periodCount * periodSize
-        .stopTreshold = 1024 * 2,   // periodCount * periodSize
-        .silenceTreshold = 0,
-        .silenceSize = 0,
-        .channelCount = 2,                                                  // Stereo
-        .sampleRate = 44100,                                                // Common sample rate
-        .sampleFormat = types::AudioDeviceInfo::DeviceFormat::kFormatS16LE  // 16-bit signed little-endian
-    };
-    return defaultFormat;
-}
-
-uint32_t AudioDevice::getFlags(bool isCapture) const {
-    if (isCapture) {
-        return AlsaDriver::kCapture;
-    }
-    return AlsaDriver::kPlayback;
 }

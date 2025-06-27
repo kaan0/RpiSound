@@ -10,9 +10,10 @@
 class IAudioDevice {
 public:
     // Device operations
-    virtual bool open(const types::AudioDeviceInfo& deviceInfo, bool isCapture = false) = 0;
+    virtual bool open(const types::AudioDeviceInfo& deviceInfo) = 0;
     virtual void close() = 0;
     virtual bool isOpen() const = 0;
+    virtual types::AudioDeviceInfo getDeviceInfo() const = 0;
 
     // Audio operations
     virtual bool write(const types::audio_span_t& audioData) = 0;

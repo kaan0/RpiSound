@@ -6,7 +6,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_BUILD_TYPE Debug)
 
 option(BUILD_FOR_AARCH64 "Cross compile for aarch64" OFF)
-option(BUILD_EXAMPLES "Build examples" ON)
+option(BUILD_EXAMPLES "Build examples" OFF)
 option(BUILD_TESTS "Build tests" ON)
 option(ENABLE_CPPCHECK "Run CPP check" OFF)
 option(ENABLE_CLANG_FORMAT "Run Clang format" OFF)
@@ -46,19 +46,13 @@ set_target_properties(tinyalsa PROPERTIES
 )
 add_dependencies(tinyalsa tinyalsa_build)
 
-# Add the source files for standalone executable
-add_executable(RpiSound src/rpi_sound.cpp)
-target_include_directories(RpiSound PRIVATE ${CMAKE_BINARY_DIR}/tinyalsa/include)
-
 # Add library sources
 add_library(RpiSoundLib
-    src/audio_device_manager.cpp
-    src/audio_utils.cpp
-    src/pcm_converter.cpp
-    src/player.cpp
-    src/rpi_sound.cpp
-    src/tiny_alsa_wrapper.cpp
-    src/wav_parser.cpp
+    ${CMAKE_SOURCE_DIR}/src/rpi_sound/alsa_driver.cpp
+    ${CMAKE_SOURCE_DIR}/src/rpi_sound/audio_device_manager.cpp
+    ${CMAKE_SOURCE_DIR}/src/rpi_sound/audio_device.cpp
+    ${CMAKE_SOURCE_DIR}/src/rpi_sound/pcm_loader.cpp
+    ${CMAKE_SOURCE_DIR}/src/rpi_sound/sound_manager.cpp
 )
 
 target_include_directories(RpiSoundLib PUBLIC
@@ -69,6 +63,15 @@ target_include_directories(RpiSoundLib PUBLIC
 
 target_include_directories(RpiSoundLib PRIVATE ${CMAKE_BINARY_DIR}/tinyalsa/include)
 target_link_libraries(RpiSoundLib PRIVATE tinyalsa pthread)
+
+# Add the source files for standalone executable
+add_executable(RpiSound src/rpi_sound.cpp)
+target_include_directories(RpiSound PRIVATE
+    ${CMAKE_BINARY_DIR}/tinyalsa/include
+    ${CMAKE_SOURCE_DIR}/include
+)
+
+target_link_libraries(RpiSound PRIVATE RpiSoundLib)
 
 if(BUILD_TESTS)
     enable_testing()

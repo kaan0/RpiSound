@@ -27,6 +27,7 @@ bool PcmLoader::load(const std::string& instrumentFolder) {
         std::cerr << "Filesystem error: " << e.what() << std::endl;
         return false;  // Error during directory iteration
     }
+    return true;
 }
 
 // Get the sound sample for the specified file path
