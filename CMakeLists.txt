@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_BUILD_TYPE Debug)
 
-option(BUILD_FOR_AARCH64 "Cross compile for aarch64" OFF)
+option(BUILD_FOR_AARCH64 "Cross compile for aarch64" ON)
 option(BUILD_EXAMPLES "Build examples" OFF)
 option(BUILD_TESTS "Build tests" ON)
 option(ENABLE_CPPCHECK "Run CPP check" OFF)

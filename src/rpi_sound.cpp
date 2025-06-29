@@ -3,6 +3,8 @@
 
 #include "rpi_sound/alsa_driver.hpp"
 #include "rpi_sound/audio_device_manager.hpp"
+#include "rpi_sound/pcm_loader.hpp"
+#include "rpi_sound/sound_manager.hpp"
 
 int main() {
     std::cout << "RpiSound!" << std::endl;
@@ -19,15 +21,20 @@ int main() {
         return -1;
     }
 
-    // Get available devices
-    auto devices = audioDeviceManager.getAvailableDevices();
-    if (devices.empty()) {
-        std::cout << "No audio devices found." << std::endl;
+    SoundManager soundManager(std::make_unique<PcmLoader>(), audioDeviceManager);
+    if (!soundManager.initialize()) {
+        std::cerr << "Failed to initialize Sound Manager." << std::endl;
+        return -1;
+    }
+
+    auto availableDevices = soundManager.getAvailableAudioDevices();
+    if (availableDevices.empty()) {
+        std::cerr << "No audio devices available." << std::endl;
         return -1;
     }
 
     // Print available devices
-    for (const auto& device : devices) {
+    for (const auto& device : availableDevices) {
         std::cout << "Found device: " << device.description << " (Card: " << device.cardId
                   << ", Device: " << device.deviceId << ")" << std::endl;
     }

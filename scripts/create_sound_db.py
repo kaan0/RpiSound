@@ -28,7 +28,7 @@ def process_folder(folder):
                 f"channels:{audio.channels}".encode(),
                 f"samplewidth:{audio.sample_width}".encode(),
                 f"frames:{int(audio.frame_count())}".encode(),
-            ]) + b"PCM DATA"
+            ]) + b"PCM DATA" + b"\n"
 
             with open(outpath_pcm, "wb") as f:
                 f.write(metadata)

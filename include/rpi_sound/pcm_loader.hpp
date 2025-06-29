@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <unordered_map>
 
 #include "isound_loader.hpp"
@@ -21,7 +22,7 @@ public:
     bool load(const std::string& instrumentFolder) override;
 
     // Get the loaded sound sample for the specified file path
-    types::SoundSample& getSample(const std::string_view sampleName) const override;
+    const types::SoundSample& getSample(const std::string_view sampleName) const override;
 
     // Destructor
     ~PcmLoader() override = default;

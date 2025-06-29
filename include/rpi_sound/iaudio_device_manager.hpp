@@ -1,5 +1,7 @@
 #pragma once
 
+#include "alsa_driver.hpp"
+#include "iaudio_device.hpp"
 #include "types/audio_device_info.hpp"
 
 class IAudioDeviceManager {
@@ -24,6 +26,9 @@ public:
 
     // Check if an audio device is currently open
     virtual bool isDeviceOpen() const = 0;
+
+    // Get the currently opened audio device
+    virtual std::shared_ptr<IAudioDevice> getCurrentDevice() const = 0;
 
     // Destructor
     virtual ~IAudioDeviceManager() = default;

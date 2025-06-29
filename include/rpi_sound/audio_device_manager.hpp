@@ -42,6 +42,9 @@ public:
     // Check if an audio device is currently open
     bool isDeviceOpen() const override;
 
+    // Get the currently opened audio device
+    std::shared_ptr<IAudioDevice> getCurrentDevice() const override { return m_currentDevice; }
+
 private:
     // Private constructor for singleton pattern
     AudioDeviceManager() = default;
@@ -62,7 +65,7 @@ private:
                          types::AudioDeviceInfo::DeviceFormat& format);
 
     // Pointer to the currently opened audio device
-    std::unique_ptr<IAudioDevice> m_currentDevice;
+    std::shared_ptr<IAudioDevice> m_currentDevice;
 
     // List of available audio devices
     std::vector<types::AudioDeviceInfo> m_availableDevices;
