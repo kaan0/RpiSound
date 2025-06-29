@@ -22,6 +22,7 @@ bool SoundManager::selectAudioDevice(const types::AudioDeviceInfo& deviceInfo) {
     if (!m_audioDeviceManager.isInitialized()) {
         return false;  // Audio device manager is not initialized
     }
+    std::cout << "Selecting audio device: " << deviceInfo.description << std::endl;
     return m_audioDeviceManager.openDevice(deviceInfo);  // Attempt to open the specified audio device
 }
 

@@ -54,22 +54,72 @@ bool AudioDevice::isOpen() const {
 }
 
 bool AudioDevice::write(const types::audio_span_t& audioData) {
-    auto bufferSize{getBufferSize()};
-    auto framesToWrite{audioData.size()};
-    for (auto offset = 0; offset < audioData.size(); offset += bufferSize) {
-        auto remainingFrames = audioData.size() - offset;
-        if (remainingFrames < bufferSize) {
-            bufferSize = remainingFrames;
+    if (!m_pcmHandle || audioData.empty()) {
+        return false;
+    }
+
+    // Get buffer size in frames
+    auto bufferSizeFrames = m_deviceInfo.format.periodSize;
+    auto channelCount = m_deviceInfo.format.channelCount;
+    auto samplesPerFrame = channelCount;
+
+    // Calculate how many samples we can write per chunk
+    uint32_t maxSamplesPerChunk = bufferSizeFrames * samplesPerFrame;
+
+    size_t totalSamples = audioData.size();
+    size_t samplesWritten = 0;
+
+    std::cout << "Writing " << totalSamples << " samples (" << totalSamples / samplesPerFrame
+              << " frames) to audio device" << std::endl;
+    std::cout << "Buffer size: " << bufferSizeFrames << " frames, " << maxSamplesPerChunk << " samples per chunk"
+              << std::endl;
+
+    while (samplesWritten < totalSamples) {
+        // Calculate how many samples to write in this chunk
+        uint32_t remainingSamples = totalSamples - samplesWritten;
+        auto samplesToWrite = std::min(maxSamplesPerChunk, remainingSamples);
+
+        // Ensure we write complete frames (samples must be divisible by channel count)
+        auto framesToWrite = samplesToWrite / samplesPerFrame;
+        if (framesToWrite == 0 && remainingSamples > 0) {
+            // If we have less than one frame remaining, pad or handle appropriately
+            std::cerr << "Warning: Incomplete frame data remaining (" << remainingSamples << " samples)" << std::endl;
+            break;
         }
 
-        auto chunk{audioData.subspan(offset, bufferSize)};
+        samplesToWrite = framesToWrite * samplesPerFrame;
 
-        auto bytesWritten{m_alsaDriver->pcmWrite(m_pcmHandle, chunk.data(), bufferSize)};
-        if (bytesWritten < 0) {
+        // Get the chunk of data to write
+        auto chunk = audioData.subspan(samplesWritten, samplesToWrite);
+
+        // pcmWrite expects data as bytes, but takes frame count as parameter
+        auto result = m_alsaDriver->pcmWrite(m_pcmHandle, reinterpret_cast<const char*>(chunk.data()), framesToWrite);
+
+        if (result < 0) {
             m_lastError = m_alsaDriver->pcmGetError(m_pcmHandle);
+            std::cerr << "PCM write error: " << m_lastError << std::endl;
             return false;
         }
+
+        // result is the number of frames actually written
+        auto actualSamplesWritten = static_cast<size_t>(result) * samplesPerFrame;
+        samplesWritten += actualSamplesWritten;
+
+        // If we couldn't write the full chunk, we might need to wait or handle underrun
+        if (static_cast<size_t>(result) < framesToWrite) {
+            std::cout << "Partial write: requested " << framesToWrite << " frames, wrote " << result << " frames"
+                      << std::endl;
+
+            // Wait for the device to be ready for more data
+            auto waitResult = m_alsaDriver->pcmWait(m_pcmHandle, 1000);  // 1 second timeout
+            if (waitResult < 0) {
+                m_lastError = "Timeout waiting for PCM device";
+                std::cerr << "PCM wait timeout" << std::endl;
+                return false;
+            }
+        }
     }
+
     return true;
 }
 

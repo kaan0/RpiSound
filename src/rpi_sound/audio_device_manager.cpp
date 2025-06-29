@@ -47,6 +47,19 @@ void AudioDeviceManager::initialize(std::unique_ptr<AlsaDriver> alsaDriver) {
         types::AudioDeviceInfo::DeviceFormat format;
         if (getDeviceFormat(device.cardId, device.deviceId, device.type, format)) {
             device.format = format;
+            std::cout << "Device found: " << device.description << " (Card: " << device.cardId
+                      << ", Device: " << device.deviceId << ")" << std::endl;
+            std::cout << "Format: " << format.sampleRate << " Hz, "
+                      << (format.sampleFormat == types::AudioDeviceInfo::DeviceFormat::kFormatS16LE   ? "S16LE"
+                          : format.sampleFormat == types::AudioDeviceInfo::DeviceFormat::kFormatS32LE ? "S32LE"
+                          : format.sampleFormat == types::AudioDeviceInfo::DeviceFormat::kFormatFloat ? "FLOAT"
+                                                                                                      : "UNKNOWN")
+                      << ", Channels: " << format.channelCount << ", Period Size: " << format.periodSize
+                      << ", Period Count: " << format.periodCount << ", Type:"
+                      << (device.type == types::AudioDeviceInfo::DeviceType::kPlayback  ? "Playback"
+                          : device.type == types::AudioDeviceInfo::DeviceType::kCapture ? "Capture"
+                                                                                        : "Invalid")
+                      << std::endl;
         } else {
             std::cerr << "Failed to get device format for card " << device.cardId << ", device " << device.deviceId
                       << std::endl;

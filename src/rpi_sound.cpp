@@ -39,5 +39,17 @@ int main() {
                   << ", Device: " << device.deviceId << ")" << std::endl;
     }
 
+    // Select the first available device
+    if (!soundManager.selectAudioDevice(availableDevices.front())) {
+        std::cerr << "Failed to select audio device." << std::endl;
+        return -1;
+    }
+
+    // Trigger a sound sample
+    if (!soundManager.triggerSound("snare_0", 100)) {
+        std::cerr << "Failed to trigger sound sample." << std::endl;
+        return -1;
+    }
+
     return 0;
 }

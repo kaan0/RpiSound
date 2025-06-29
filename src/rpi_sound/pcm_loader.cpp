@@ -28,16 +28,19 @@ bool PcmLoader::load(const std::string& instrumentFolder) {
         std::cerr << "Filesystem error: " << e.what() << std::endl;
         return false;  // Error during directory iteration
     }
+
     return true;
 }
 
 const types::SoundSample& PcmLoader::getSample(const std::string_view sampleName) const {
-    auto it = m_samples.find(sampleName);
+    // Check if the sample exists in the map
+    auto it = m_samples.find(std::string(sampleName));
     if (it != m_samples.end()) {
         return it->second;
-    } else {
-        return types::SoundSample{};  // Return an empty sample if not found
     }
+
+    static const types::SoundSample empty_sample{};
+    return empty_sample;
 }
 
 // Get the sound sample for the specified file path
@@ -59,15 +62,13 @@ bool PcmLoader::parseSample(const std::filesystem::path& filePath, types::SoundS
     // 1) Read header more efficiently until marker is found
     std::string header;
     header.reserve(512);
-    std::string line;
     bool markerFound = false;
 
-    while (std::getline(file, line)) {
-        if (line.find(kDataMarker) != std::string::npos) {
+    while (std::getline(file, header)) {
+        if (header.find(kDataMarker) != std::string::npos) {
             markerFound = true;
             break;
         }
-        header += line + '\n';
 
         // Safety check for header size
         if (header.size() > MAX_HEADER_SIZE) {
@@ -83,7 +84,6 @@ bool PcmLoader::parseSample(const std::filesystem::path& filePath, types::SoundS
 
     // 2) Parse fields via string_view + from_chars
     std::string_view hv{header};
-    std::cout << "Header: " << hv << std::endl;
     auto parseField = [&](const char* key, auto& out) {
         auto keyv = std::string_view{key};
         auto pos = hv.find(keyv);
@@ -92,7 +92,6 @@ bool PcmLoader::parseSample(const std::filesystem::path& filePath, types::SoundS
         pos += keyv.size();
         auto end = hv.find('|', pos);
         auto tok = hv.substr(pos, end - pos);
-        std::cout << "Parsing field: " << key << " with value: " << tok << std::endl;
 
         if constexpr (std::is_same_v<std::decay_t<decltype(out)>, std::string>) {
             out = std::string(tok);

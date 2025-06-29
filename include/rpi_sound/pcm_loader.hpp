@@ -32,5 +32,5 @@ private:
     bool parseSample(const std::filesystem::path& filePath, types::SoundSample& sample) const;
 
     // Map to store loaded sound samples by file path
-    std::unordered_map<std::string_view, types::SoundSample> m_samples;
+    std::unordered_map<std::string, types::SoundSample> m_samples;
 };
