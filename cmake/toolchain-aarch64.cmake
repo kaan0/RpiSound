@@ -9,8 +9,8 @@ set(CMAKE_CXX_COMPILER aarch64-linux-gnu-g++-12)
 # Set the sysroot
 set(CMAKE_SYSROOT ~/target-sysroot)
 
-SET(CMAKE_C_FLAGS " -mcpu=cortex-a72+crc+crypto -fstack-protector-strong   -Wformat -Wformat-security -Werror=format-security --sysroot=${CMAKE_SYSROOT}")
-SET(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS}")
+SET(CMAKE_C_FLAGS " -mcpu=cortex-a72+crc+crypto -fstack-protector-strong -Wformat -Wformat-security -Werror=format-security --sysroot=${CMAKE_SYSROOT}")
+SET(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++20 ")
 
 # Search paths for the sysroot
 set(CMAKE_FIND_ROOT_PATH ${CMAKE_SYSROOT})

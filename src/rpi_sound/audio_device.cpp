@@ -2,6 +2,7 @@
 #include <numeric>
 
 #include "rpi_sound/audio_device.hpp"
+#include "utilities/logger.hpp"
 
 AudioDevice::AudioDevice(std::shared_ptr<AlsaDriver> alsaDriver) : m_alsaDriver(std::move(alsaDriver)) {}
 
@@ -69,10 +70,12 @@ bool AudioDevice::write(const types::audio_span_t& audioData) {
     size_t totalSamples = audioData.size();
     size_t samplesWritten = 0;
 
-    std::cout << "Writing " << totalSamples << " samples (" << totalSamples / samplesPerFrame
-              << " frames) to audio device" << std::endl;
-    std::cout << "Buffer size: " << bufferSizeFrames << " frames, " << maxSamplesPerChunk << " samples per chunk"
-              << std::endl;
+    utilities::log.debug(
+        "Writing {} samples ({} frames) to audio device with buffer size {} frames, {} samples per chunk",
+        totalSamples,
+        totalSamples / samplesPerFrame,
+        bufferSizeFrames,
+        maxSamplesPerChunk);
 
     while (samplesWritten < totalSamples) {
         // Calculate how many samples to write in this chunk
@@ -83,7 +86,7 @@ bool AudioDevice::write(const types::audio_span_t& audioData) {
         auto framesToWrite = samplesToWrite / samplesPerFrame;
         if (framesToWrite == 0 && remainingSamples > 0) {
             // If we have less than one frame remaining, pad or handle appropriately
-            std::cerr << "Warning: Incomplete frame data remaining (" << remainingSamples << " samples)" << std::endl;
+            utilities::log.warning("Not enough samples to write a full frame. Remaining samples: {}", remainingSamples);
             break;
         }
 
@@ -97,7 +100,7 @@ bool AudioDevice::write(const types::audio_span_t& audioData) {
 
         if (result < 0) {
             m_lastError = m_alsaDriver->pcmGetError(m_pcmHandle);
-            std::cerr << "PCM write error: " << m_lastError << std::endl;
+            utilities::log.error("Failed to write {} frames to PCM device: {}", framesToWrite, m_lastError);
             return false;
         }
 
@@ -107,14 +110,13 @@ bool AudioDevice::write(const types::audio_span_t& audioData) {
 
         // If we couldn't write the full chunk, we might need to wait or handle underrun
         if (static_cast<size_t>(result) < framesToWrite) {
-            std::cout << "Partial write: requested " << framesToWrite << " frames, wrote " << result << " frames"
-                      << std::endl;
+            utilities::log.warning("Partial write: requested {} frames, wrote {} frames", framesToWrite, result);
 
             // Wait for the device to be ready for more data
             auto waitResult = m_alsaDriver->pcmWait(m_pcmHandle, 1000);  // 1 second timeout
             if (waitResult < 0) {
-                m_lastError = "Timeout waiting for PCM device";
-                std::cerr << "PCM wait timeout" << std::endl;
+                m_lastError = m_alsaDriver->pcmGetError(m_pcmHandle);
+                utilities::log.error("Failed to wait for PCM device: {}", m_lastError);
                 return false;
             }
         }

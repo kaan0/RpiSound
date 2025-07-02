@@ -5,11 +5,12 @@
 #include <iterator>
 
 #include "rpi_sound/pcm_loader.hpp"
+#include "utilities/logger.hpp"
 
 bool PcmLoader::load(const std::string& instrumentFolder) {
     auto rootPath{std::filesystem::path(kSoundDirectory) / std::filesystem::path(instrumentFolder)};
     if (!std::filesystem::exists(rootPath) || !std::filesystem::is_directory(rootPath)) {
-        std::cout << "Instrument folder does not exist or is not a directory: " << rootPath << std::endl;
+        utilities::log.error("Instrument folder does not exist or is not a directory: {}", rootPath.string());
         return false;
     }
 
@@ -20,12 +21,12 @@ bool PcmLoader::load(const std::string& instrumentFolder) {
                 if (parseSample(entry.path().string(), sample)) {
                     m_samples[entry.path().stem().string()] = std::move(sample);
                 } else {
-                    std::cerr << "Failed to load sound sample: " << entry.path() << std::endl;
+                    utilities::log.error("Failed to parse sound sample: {}", entry.path().string());
                 }
             }
         }
     } catch (const std::filesystem::filesystem_error& e) {
-        std::cerr << "Filesystem error: " << e.what() << std::endl;
+        utilities::log.error("Filesystem error while loading samples: {}", e.what());
         return false;  // Error during directory iteration
     }
 
@@ -55,7 +56,7 @@ bool PcmLoader::parseSample(const std::filesystem::path& filePath, types::SoundS
     // Open the PCM file
     std::ifstream file{filePath, std::ios::binary};
     if (!file.good()) {
-        std::cerr << "Failed to open PCM file: " << filePath << std::endl;
+        utilities::log.error("Failed to open PCM file: {}", filePath.string());
         return false;
     }
 
@@ -72,13 +73,13 @@ bool PcmLoader::parseSample(const std::filesystem::path& filePath, types::SoundS
 
         // Safety check for header size
         if (header.size() > MAX_HEADER_SIZE) {
-            std::cerr << "Header too large in " << filePath << std::endl;
+            utilities::log.error("Header too large in: {}", filePath.string());
             return false;
         }
     }
 
     if (!markerFound) {
-        std::cerr << "PCM DATA marker not found in " << filePath << std::endl;
+        utilities::log.error("PCM DATA marker not found in: {}", filePath.string());
         return false;
     }
 
@@ -105,58 +106,58 @@ bool PcmLoader::parseSample(const std::filesystem::path& filePath, types::SoundS
 
     // Parse and validate each field with specific error messages
     if (!parseField(kKeyName, sample.metadata.name)) {
-        std::cerr << "Missing or invalid 'name' field in " << filePath << std::endl;
+        utilities::log.error("Missing or invalid 'name' field in: {}", filePath.string());
         return false;
     }
 
     if (!parseField(kKeySampleRate, sample.metadata.sampleRate)) {
-        std::cerr << "Missing or invalid 'samplerate' field in " << filePath << std::endl;
+        utilities::log.error("Missing or invalid 'samplerate' field in: {}", filePath.string());
         return false;
     }
 
     if (!parseField(kKeyChannels, sample.metadata.channels)) {
-        std::cerr << "Missing or invalid 'channels' field in " << filePath << std::endl;
+        utilities::log.error("Missing or invalid 'channels' field in: {}", filePath.string());
         return false;
     }
 
     if (!parseField(kKeyFrames, sample.metadata.frames)) {
-        std::cerr << "Missing or invalid 'frames' field in " << filePath << std::endl;
+        utilities::log.error("Missing or invalid 'frames' field in: {}", filePath.string());
         return false;
     }
 
     // Parse sample width for validation
     uint32_t sampleWidth = 0;
     if (!parseField(kKeySampleWidth, sampleWidth)) {
-        std::cerr << "Missing or invalid 'samplewidth' field in " << filePath << std::endl;
+        utilities::log.error("Missing or invalid 'samplewidth' field in: {}", filePath.string());
         return false;
     }
 
     // Validate parsed values
     if (sample.metadata.sampleRate < MIN_SAMPLE_RATE || sample.metadata.sampleRate > MAX_SAMPLE_RATE) {
-        std::cerr << "Invalid sample rate: " << sample.metadata.sampleRate << " in " << filePath << std::endl;
+        utilities::log.error("Invalid sample rate: {} in {}", sample.metadata.sampleRate, filePath.string());
         return false;
     }
 
     if (sample.metadata.channels == 0 || sample.metadata.channels > MAX_CHANNELS) {
-        std::cerr << "Invalid channel count: " << sample.metadata.channels << " in " << filePath << std::endl;
+        utilities::log.error("Invalid channel count: {} in {}", sample.metadata.channels, filePath.string());
         return false;
     }
 
     if (sample.metadata.frames == 0) {
-        std::cerr << "Invalid frame count: " << sample.metadata.frames << " in " << filePath << std::endl;
+        utilities::log.error("Invalid frame count: 0 in {}", filePath.string());
         return false;
     }
 
     if (sampleWidth != sizeof(types::audio_t)) {
-        std::cerr << "Unsupported sample width " << sampleWidth << " (expected " << sizeof(types::audio_t) << ") in "
-                  << filePath << std::endl;
+        utilities::log.error(
+            "Unsupported sample width: {} in {}, expected {}", sampleWidth, filePath.string(), sizeof(types::audio_t));
         return false;
     }
 
     // 3) Validate total data size before allocation
     size_t totalSamples = sample.metadata.frames * sample.metadata.channels;
     if (totalSamples > MAX_AUDIO_DATA_SIZE / sizeof(types::audio_t)) {
-        std::cerr << "Audio data too large: " << totalSamples << " samples in " << filePath << std::endl;
+        utilities::log.error("Audio data too large: {} samples in {}", totalSamples, filePath.string());
         return false;
     }
 
@@ -169,8 +170,8 @@ bool PcmLoader::parseSample(const std::filesystem::path& filePath, types::SoundS
     // Check if we read the expected amount of data
     auto bytesRead = file.gcount();
     if (static_cast<size_t>(bytesRead) != expectedBytes) {
-        std::cerr << "Partial read: expected " << expectedBytes << " bytes, got " << bytesRead << " in " << filePath
-                  << std::endl;
+        utilities::log.error(
+            "Partial read: expected {} bytes, got {} in {}", expectedBytes, bytesRead, filePath.string());
         return false;
     }
 

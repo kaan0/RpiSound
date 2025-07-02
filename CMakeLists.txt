@@ -46,6 +46,14 @@ set_target_properties(tinyalsa PROPERTIES
 )
 add_dependencies(tinyalsa tinyalsa_build)
 
+include(FetchContent)
+FetchContent_Declare(
+  fmt
+  GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+  GIT_TAG        10.1.1
+)
+FetchContent_MakeAvailable(fmt)
+
 # Add library sources
 add_library(RpiSoundLib
     ${CMAKE_SOURCE_DIR}/src/rpi_sound/alsa_driver.cpp
@@ -56,13 +64,17 @@ add_library(RpiSoundLib
 )
 
 target_include_directories(RpiSoundLib PUBLIC
-    third_party/tinyalsa/include
-    include
-    include/rpi_sound
+    ${CMAKE_SOURCE_DIR}/third_party/tinyalsa/include
+    ${CMAKE_SOURCE_DIR}/include
 )
 
 target_include_directories(RpiSoundLib PRIVATE ${CMAKE_BINARY_DIR}/tinyalsa/include)
-target_link_libraries(RpiSoundLib PRIVATE tinyalsa pthread)
+target_link_libraries(RpiSoundLib
+    PRIVATE
+        tinyalsa
+        pthread
+    PUBLIC
+        fmt::fmt)
 
 # Add the source files for standalone executable
 add_executable(RpiSound src/rpi_sound.cpp)
