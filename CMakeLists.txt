@@ -4,8 +4,9 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-option(BUILD_FOR_AARCH64 "Cross compile for aarch64" ON)
+option(BUILD_FOR_AARCH64 "Cross compile for aarch64" OFF)
 option(BUILD_EXAMPLES "Build examples" OFF)
 option(BUILD_TESTS "Build tests" ON)
 option(ENABLE_CPPCHECK "Run CPP check" OFF)
@@ -27,25 +28,6 @@ endif()
 # Project details
 project(RpiSound)
 
-# Build TinyALSA as an external project
-include(ExternalProject)
-ExternalProject_Add(tinyalsa_build
-    SOURCE_DIR ${CMAKE_SOURCE_DIR}/third_party/tinyalsa
-    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/tinyalsa
-               -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
-               -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
-               -DBUILD_SHARED_LIBS=OFF
-    BUILD_BYPRODUCTS ${CMAKE_BINARY_DIR}/tinyalsa/lib/libtinyalsa.a
-)
-
-# Define a target for TinyALSA
-add_library(tinyalsa STATIC IMPORTED)
-set_target_properties(tinyalsa PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_BINARY_DIR}/tinyalsa/lib/libtinyalsa.a
-    INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_SOURCE_DIR}/third_party/tinyalsa/include
-)
-add_dependencies(tinyalsa tinyalsa_build)
-
 include(FetchContent)
 FetchContent_Declare(
   fmt
@@ -53,6 +35,13 @@ FetchContent_Declare(
   GIT_TAG        10.1.1
 )
 FetchContent_MakeAvailable(fmt)
+
+FetchContent_Declare(
+  tinyalsa
+  GIT_REPOSITORY https://github.com/tinyalsa/tinyalsa.git
+  GIT_TAG        v2.0.0
+)
+FetchContent_MakeAvailable(tinyalsa)
 
 # Add library sources
 add_library(RpiSoundLib
@@ -64,32 +53,26 @@ add_library(RpiSoundLib
 )
 
 target_include_directories(RpiSoundLib PUBLIC
-    ${CMAKE_SOURCE_DIR}/third_party/tinyalsa/include
     ${CMAKE_SOURCE_DIR}/include
 )
 
-target_include_directories(RpiSoundLib PRIVATE ${CMAKE_BINARY_DIR}/tinyalsa/include)
 target_link_libraries(RpiSoundLib
     PRIVATE
-        tinyalsa
         pthread
     PUBLIC
-        fmt::fmt)
+        fmt
+        tinyalsa)
 
 # Add the source files for standalone executable
 add_executable(RpiSound src/rpi_sound.cpp)
 target_include_directories(RpiSound PRIVATE
-    ${CMAKE_BINARY_DIR}/tinyalsa/include
     ${CMAKE_SOURCE_DIR}/include
 )
 
 target_link_libraries(RpiSound PRIVATE RpiSoundLib)
 
 if(BUILD_TESTS)
-    enable_testing()
-    if(NOT BUILD_FOR_AARCH64)
-        add_subdirectory(tests)
-    endif()
+    add_subdirectory(tests)
 endif()
 
 if(BUILD_EXAMPLES)

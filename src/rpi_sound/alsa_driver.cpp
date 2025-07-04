@@ -1,7 +1,5 @@
 #include "rpi_sound/alsa_driver.hpp"
 
-#include "rpi_sound/alsa_driver.hpp"
-
 AlsaDriver::PcmHandle* AlsaDriver::pcmOpen(uint32_t card, uint32_t device, uint32_t flags, const PcmConfig* config) {
     return pcm_open(card, device, flags, config);
 }

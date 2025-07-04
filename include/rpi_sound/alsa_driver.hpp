@@ -1,7 +1,7 @@
 #pragma once
 
 extern "C" {
-#include "tinyalsa/pcm.h"
+#include <tinyalsa/pcm.h>
 }
 
 #include <cstdint>
@@ -33,7 +33,6 @@ public:
     static constexpr PcmFormat kFormatInvalid = PCM_FORMAT_INVALID;
     static constexpr PcmFormat kFormatS16LE = PCM_FORMAT_S16_LE;
     static constexpr PcmFormat kFormatS32LE = PCM_FORMAT_S32_LE;
-    static constexpr PcmFormat kFormatFloatLE = PCM_FORMAT_FLOAT_LE;
 
     static constexpr Flags kPlayback = PCM_OUT;
     static constexpr Flags kCapture = PCM_IN;
