@@ -6,7 +6,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-option(BUILD_FOR_AARCH64 "Cross compile for aarch64" OFF)
+option(BUILD_FOR_AARCH64 "Cross compile for aarch64" ON)
 option(BUILD_EXAMPLES "Build examples" OFF)
 option(BUILD_TESTS "Build tests" ON)
 option(ENABLE_CPPCHECK "Run CPP check" OFF)
@@ -28,6 +28,8 @@ endif()
 # Project details
 project(RpiSound)
 
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+
 include(FetchContent)
 FetchContent_Declare(
   fmt
@@ -44,7 +46,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(tinyalsa)
 
 # Add library sources
-add_library(RpiSoundLib
+add_library(RpiSoundLib STATIC
     ${CMAKE_SOURCE_DIR}/src/rpi_sound/alsa_driver.cpp
     ${CMAKE_SOURCE_DIR}/src/rpi_sound/audio_device_manager.cpp
     ${CMAKE_SOURCE_DIR}/src/rpi_sound/audio_device.cpp

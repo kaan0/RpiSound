@@ -9,6 +9,19 @@ namespace types {
 
 struct AudioDeviceInfo {
     enum DeviceType { kInvalid, kPlayback, kCapture };
+    // Convert DeviceType to string
+    static std::string to_string(DeviceType type) {
+        switch (type) {
+            case kInvalid:
+                return "Invalid";
+            case kPlayback:
+                return "Playback";
+            case kCapture:
+                return "Capture";
+            default:
+                return "Unknown";
+        }
+    }
     struct DeviceFormat {
         enum SampleFormat {
             kFormatInvalid = -1,  // Invalid format

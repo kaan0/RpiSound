@@ -20,8 +20,8 @@ int AlsaDriver::pcmRead(PcmHandle* pcm, void* data, uint32_t count) {
     return pcm_read(pcm, data, count);
 }
 
-int AlsaDriver::pcmIsReady(const PcmHandle* pcm) {
-    return pcm_is_ready(pcm);
+bool AlsaDriver::pcmIsReady(const PcmHandle* pcm) {
+    return pcm_is_ready(pcm) != 0;
 }
 
 const char* AlsaDriver::pcmGetError(const PcmHandle* pcm) {

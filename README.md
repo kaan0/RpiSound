@@ -39,12 +39,10 @@
 
 - CMake 3.10+
 - C++17-compatible compiler
-- [TinyALSA](https://github.com/tinyalsa/tinyalsa)
 
 ### Building (Native)
 
 ```bash
-git submodule update --init --recursive
 mkdir -p build && cd build
 cmake ..
 make -j

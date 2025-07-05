@@ -24,10 +24,11 @@ bool SoundManager::selectAudioDevice(const types::AudioDeviceInfo& deviceInfo) {
     if (!m_audioDeviceManager.isInitialized()) {
         return false;  // Audio device manager is not initialized
     }
-    utilities::log.info("Selecting audio device: {} (Card: {}, Device: {})",
+    utilities::log.info("Selecting audio device: {} (Card: {}, Device: {}, Type: {})",
                         deviceInfo.description,
                         deviceInfo.cardId,
-                        deviceInfo.deviceId);
+                        deviceInfo.deviceId,
+                        types::AudioDeviceInfo::to_string(deviceInfo.type));
     return m_audioDeviceManager.openDevice(deviceInfo);  // Attempt to open the specified audio device
 }
 

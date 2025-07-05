@@ -64,7 +64,7 @@ public:
 
     virtual int pcmRead(PcmHandle* pcm, void* data, uint32_t count);
 
-    virtual int pcmIsReady(const PcmHandle* pcm);
+    virtual bool pcmIsReady(const PcmHandle* pcm);
 
     virtual const char* pcmGetError(const PcmHandle* pcm);
 

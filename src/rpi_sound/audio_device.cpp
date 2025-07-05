@@ -35,8 +35,8 @@ AudioDevice& AudioDevice::operator=(AudioDevice&& other) noexcept {
 
 bool AudioDevice::open(const types::AudioDeviceInfo& deviceInfo) {
     auto config{createPcmConfig(deviceInfo.format)};
-    m_pcmHandle = m_alsaDriver->pcmOpen(deviceInfo.cardId, deviceInfo.deviceId, deviceInfo.type, &config);
-    if (!m_pcmHandle) {
+    m_pcmHandle = m_alsaDriver->pcmOpen(deviceInfo.cardId, deviceInfo.deviceId, toAlsaFlag(deviceInfo.type), &config);
+    if (!m_alsaDriver->pcmIsReady(m_pcmHandle)) {
         m_lastError = m_alsaDriver->pcmGetError(m_pcmHandle);
         return false;
     }
@@ -59,68 +59,35 @@ bool AudioDevice::write(const types::audio_span_t& audioData) {
         return false;
     }
 
-    // Get buffer size in frames
-    auto bufferSizeFrames = m_deviceInfo.format.periodSize;
-    auto channelCount = m_deviceInfo.format.channelCount;
-    auto samplesPerFrame = channelCount;
+    // Convert audio data to bytes (assuming audio_span_t contains int16_t or similar)
+    const uint8_t* dataPtr = reinterpret_cast<const uint8_t*>(audioData.data());
+    auto totalDataSize = static_cast<uint32_t>(audioData.size() * sizeof(typename types::audio_span_t::element_type));
 
-    // Calculate how many samples we can write per chunk
-    uint32_t maxSamplesPerChunk = bufferSizeFrames * samplesPerFrame;
+    auto bufferSize =
+        static_cast<uint32_t>(m_alsaDriver->pcmFramesToBytes(m_pcmHandle, m_deviceInfo.format.periodSize));
+    auto remainingSize = totalDataSize;
+    uint32_t playedSize = 0;
 
-    size_t totalSamples = audioData.size();
-    size_t samplesWritten = 0;
+    utilities::log.debug("Writing {} bytes to audio device with buffer size {} bytes", totalDataSize, bufferSize);
 
-    utilities::log.debug(
-        "Writing {} samples ({} frames) to audio device with buffer size {} frames, {} samples per chunk",
-        totalSamples,
-        totalSamples / samplesPerFrame,
-        bufferSizeFrames,
-        maxSamplesPerChunk);
+    do {
+        auto currentBufferSize = std::min(remainingSize, bufferSize);
 
-    while (samplesWritten < totalSamples) {
-        // Calculate how many samples to write in this chunk
-        uint32_t remainingSamples = totalSamples - samplesWritten;
-        auto samplesToWrite = std::min(maxSamplesPerChunk, remainingSamples);
+        int32_t writtenFrames = m_alsaDriver->pcmWrite(m_pcmHandle,
+                                                       reinterpret_cast<const char*>(&dataPtr[playedSize]),
+                                                       m_alsaDriver->pcmBytesToFrames(m_pcmHandle, currentBufferSize));
 
-        // Ensure we write complete frames (samples must be divisible by channel count)
-        auto framesToWrite = samplesToWrite / samplesPerFrame;
-        if (framesToWrite == 0 && remainingSamples > 0) {
-            // If we have less than one frame remaining, pad or handle appropriately
-            utilities::log.warning("Not enough samples to write a full frame. Remaining samples: {}", remainingSamples);
-            break;
-        }
-
-        samplesToWrite = framesToWrite * samplesPerFrame;
-
-        // Get the chunk of data to write
-        auto chunk = audioData.subspan(samplesWritten, samplesToWrite);
-
-        // pcmWrite expects data as bytes, but takes frame count as parameter
-        auto result = m_alsaDriver->pcmWrite(m_pcmHandle, reinterpret_cast<const char*>(chunk.data()), framesToWrite);
-
-        if (result < 0) {
+        if (writtenFrames < 0) {
             m_lastError = m_alsaDriver->pcmGetError(m_pcmHandle);
-            utilities::log.error("Failed to write {} frames to PCM device: {}", framesToWrite, m_lastError);
+            utilities::log.error("Error playing sample: {}", m_lastError);
             return false;
         }
 
-        // result is the number of frames actually written
-        auto actualSamplesWritten = static_cast<size_t>(result) * samplesPerFrame;
-        samplesWritten += actualSamplesWritten;
+        auto writtenBytes = static_cast<uint32_t>(m_alsaDriver->pcmFramesToBytes(m_pcmHandle, writtenFrames));
+        remainingSize -= writtenBytes;
+        playedSize += writtenBytes;
 
-        // If we couldn't write the full chunk, we might need to wait or handle underrun
-        if (static_cast<size_t>(result) < framesToWrite) {
-            utilities::log.warning("Partial write: requested {} frames, wrote {} frames", framesToWrite, result);
-
-            // Wait for the device to be ready for more data
-            auto waitResult = m_alsaDriver->pcmWait(m_pcmHandle, 1000);  // 1 second timeout
-            if (waitResult < 0) {
-                m_lastError = m_alsaDriver->pcmGetError(m_pcmHandle);
-                utilities::log.error("Failed to wait for PCM device: {}", m_lastError);
-                return false;
-            }
-        }
-    }
+    } while (remainingSize > 0);
 
     return true;
 }

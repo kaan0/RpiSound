@@ -5,6 +5,8 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     cmake \
     git \
+    sshpass \
+    rsync \
     gcc-12 g++-12 \
     libasound2-dev \
     gdb \

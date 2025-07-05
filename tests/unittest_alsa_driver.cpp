@@ -76,8 +76,8 @@ TEST_F(AlsaDriverTest, PcmCloseNullHandleReturnsError) {
 
 // Test pcmIsReady with bad handle
 TEST_F(AlsaDriverTest, PcmIsReadyNullHandleReturnsFalse) {
-    int result = driver->pcmIsReady(badHandle);
-    EXPECT_EQ(result, 0);  // Should return 0 (not ready/invalid)
+    bool result = driver->pcmIsReady(badHandle);
+    EXPECT_EQ(result, false);  // Should return false (not ready/invalid)
 }
 
 // Test pcmGetError with bad handle

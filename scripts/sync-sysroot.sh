@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-TEMP_FILE=".target"
+SCRIPT_PATH=$(realpath "$0" | sed 's|\(.*\)/.*|\1|')
+TEMP_FILE="$SCRIPT_PATH/.target"
 
 # Function to get target configuration (username, IP, and password)
 get_target_config() {

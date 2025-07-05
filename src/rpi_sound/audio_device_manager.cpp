@@ -139,21 +139,42 @@ bool AudioDeviceManager::parseCardsFile(std::istream& cardsFile, std::vector<typ
 
     std::string line;
     auto isDeviceFound{false};
+    std::vector<types::AudioDeviceInfo> deviceInfos;
 
     while (std::getline(cardsFile, line)) {
         std::smatch match;
         types::AudioDeviceInfo deviceInfo;
         if (std::regex_match(line, match, lineRegex)) {
             deviceInfo.cardId = std::atoi(match[1].str().c_str());
-            deviceInfo.driver = match[3].str();
+            deviceInfo.driver = match[2].str();
+            isDeviceFound = true;
+            deviceInfos.push_back(deviceInfo);
         } else if (std::regex_match(line, match, longnameRegex)) {
             deviceInfo.description = match[1].str();
-            devices.push_back(deviceInfo);
-            isDeviceFound = true;
+            if (!deviceInfos.empty()) {
+                // Update the last deviceInfo with the description
+                deviceInfos.back().description = deviceInfo.description;
+            } else {
+                utilities::log.error("No device info found for description: {}", deviceInfo.description);
+            }
         }
     }
 
-    return isDeviceFound;
+    if (!isDeviceFound) {
+        return false;
+    }
+    // Merge deviceInfos into devices
+    for (auto& device : devices) {
+        for (const auto& info : deviceInfos) {
+            if (device.cardId == info.cardId) {
+                device.driver = info.driver;
+                device.description = info.description;
+                break;  // Found the matching card, no need to continue
+            }
+        }
+    }
+
+    return true;
 }
 
 /* devices:
@@ -183,24 +204,21 @@ bool AudioDeviceManager::parseDevicesFile(std::istream& devicesFile,
         std::smatch match;
         if (std::regex_match(line, match, devicesRegex) && match.size() > 3) {
             auto cardId{std::atoi(match[1].str().c_str())};
-            if (cardId < devices.size()) {
-                auto type{types::AudioDeviceInfo::DeviceType::kInvalid};
-                if (match[3].str() == playbackId) {
-                    type = types::AudioDeviceInfo::DeviceType::kPlayback;
-                } else if (match[3].str() == captureId) {
-                    type = types::AudioDeviceInfo::DeviceType::kCapture;
-                } else {
-                    utilities::log.error("Unknown device type: {}", match[3].str());
-                }
-                if (devices[cardId].cardId == cardId) {
-                    devices[cardId].type = type;
-                    devices[cardId].deviceId = std::atoi(match[2].str().c_str());
-                    isDeviceFound = true;
-                } else {
-                    utilities::log.error("Card ID mismatch: expected {}, got {}", devices[cardId].cardId, cardId);
-                    continue;  // Skip this line if card ID does not match
-                }
+            auto type{types::AudioDeviceInfo::DeviceType::kInvalid};
+            if (match[3].str() == playbackId) {
+                type = types::AudioDeviceInfo::DeviceType::kPlayback;
+            } else if (match[3].str() == captureId) {
+                type = types::AudioDeviceInfo::DeviceType::kCapture;
+            } else {
+                utilities::log.warning("Unknown device type: {}", match[3].str());
+                continue;  // Skip unknown device types
             }
+            types::AudioDeviceInfo deviceInfo;
+            deviceInfo.cardId = cardId;
+            deviceInfo.type = type;
+            deviceInfo.deviceId = std::atoi(match[2].str().c_str());
+            devices.push_back(deviceInfo);
+            isDeviceFound = true;
         }
     }
 

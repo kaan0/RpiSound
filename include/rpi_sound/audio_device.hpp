@@ -35,6 +35,9 @@ public:
 
 private:
     AlsaDriver::PcmConfig createPcmConfig(const types::AudioDeviceInfo::DeviceFormat& format) const;
+    uint32_t toAlsaFlag(types::AudioDeviceInfo::DeviceType type) const {
+        return (type == types::AudioDeviceInfo::DeviceType::kPlayback) ? AlsaDriver::kPlayback : AlsaDriver::kCapture;
+    }
 
     std::shared_ptr<AlsaDriver> m_alsaDriver;
     AlsaDriver::PcmHandle* m_pcmHandle = nullptr;

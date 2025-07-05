@@ -14,7 +14,7 @@ public:
     MOCK_METHOD(int, pcmWait, (PcmHandle * pcm, int timeoutMs), (override));
     MOCK_METHOD(int, pcmWrite, (PcmHandle * pcm, const void* data, uint32_t count), (override));
     MOCK_METHOD(int, pcmRead, (PcmHandle * pcm, void* data, uint32_t count), (override));
-    MOCK_METHOD(int, pcmIsReady, (const PcmHandle* pcm), (override));
+    MOCK_METHOD(bool, pcmIsReady, (const PcmHandle* pcm), (override));
     MOCK_METHOD(const char*, pcmGetError, (const PcmHandle* pcm), (override));
 
     // Parameter and utility methods

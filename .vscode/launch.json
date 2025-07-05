@@ -1,124 +1,128 @@
 {
-    "version": "0.2.0",
-    "configurations": [
-      {
-        "name": "Debug rpi_sound",
-        "type": "cppdbg",
-        "request": "launch",
-        "program": "${workspaceFolder}/build/RpiSound",
-        "args": [],
-        "stopAtEntry": false,
-        "cwd": "${workspaceFolder}",
-        "environment": [],
-        "externalConsole": false,
-        "MIMode": "gdb",
-        "setupCommands": [
-          {
-            "description": "Enable pretty-printing for gdb",
-            "text": "-enable-pretty-printing",
-            "ignoreFailures": true
-          }
-        ],
-        "miDebuggerPath": "/usr/bin/gdb",
-        "preLaunchTask": "CMake: Build",
-        "logging": {
-          "trace": true,
-          "engineLogging": false,
-          "programOutput": true
-        }
-      },
-      {
-        "name": "Debug play_wav",
-        "type": "cppdbg",
-        "request": "launch",
-        "program": "${workspaceFolder}/build/examples/play_wav",
-        "args": ["output.wav"],
-        "stopAtEntry": false,
-        "cwd": "${workspaceFolder}/build/examples/",
-        "environment": [],
-        "externalConsole": false,
-        "MIMode": "gdb",
-        "setupCommands": [
-          {
-            "description": "Enable pretty-printing for gdb",
-            "text": "-enable-pretty-printing",
-            "ignoreFailures": true
-          }
-        ],
-        "miDebuggerPath": "/usr/bin/gdb",
-        "preLaunchTask": "CMake: Build",
-        "logging": {
-          "trace": true,
-          "engineLogging": false,
-          "programOutput": true
-        }
-      },
-      {
-        "name": "Run unittest",
-        "type": "cppdbg",
-        "request": "launch",
-        "program": "${workspaceFolder}/build/tests/RpiSoundTest",
-        "args": [],
-        "stopAtEntry": false,
-        "cwd": "${workspaceFolder}",
-        "environment": [],
-        "externalConsole": false,
-        "MIMode": "gdb",
-        "setupCommands": [
-          {
-            "description": "Enable pretty-printing for gdb",
-            "text": "-enable-pretty-printing",
-            "ignoreFailures": true
-          }
-        ],
-        "miDebuggerPath": "/usr/bin/gdb",
-        "preLaunchTask": "CMake: Build",
-        "logging": {
-          "trace": true,
-          "engineLogging": false,
-          "programOutput": true
-        },
-      },
-      {
-        "name": "Remote debug play_wav",
-        "type": "cppdbg",
-        "request": "launch",
-        "program": "${workspaceFolder}/build/examples/play_wav",
-        "args": [],
-        "stopAtEntry": true,
-        "cwd": "${workspaceFolder}",
-        "environment": [],
-        "externalConsole": true,
-        "targetArchitecture": "arm64",
-        "MIMode": "gdb",
-        "setupCommands": [
-            {
-                "description": "Enable pretty-printing for gdb",
-                "text": "-enable-pretty-printing",
-                "ignoreFailures": true
-            },
-            {
-                "description": "set sysroot",
-                "text": "set sysroot ~/target-sysroot",
-                "ignoreFailures": false
-            }
-        ],
-        "miDebuggerServerAddress": "${input:remoteIp}:3333",
-        "miDebuggerPath": "/usr/bin/gdb-multiarch",
-        // "preLaunchTask": "start_debug",
-        // "postDebugTask": "postdebug"
-    }
-    ],
-    "inputs": [
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug rpi_sound",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/RpiSound",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
         {
-            "id": "remoteIp",
-            "type": "command",
-            "command": "extension.commandvariable.file.content",
-            "args": {
-                "fileName": "${workspaceFolder}/scripts/.target",
-                "key": "TARGET_IP"
-            }
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
         }
-    ]
-  }
-  
+      ],
+      "miDebuggerPath": "/usr/bin/gdb",
+      "preLaunchTask": "CMake: Build",
+      "logging": {
+        "trace": true,
+        "engineLogging": false,
+        "programOutput": true
+      }
+    },
+    {
+      "name": "Debug play_wav",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/examples/play_wav",
+      "args": [
+        "output.wav"
+      ],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/build/examples/",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb",
+      "preLaunchTask": "CMake: Build",
+      "logging": {
+        "trace": true,
+        "engineLogging": false,
+        "programOutput": true
+      }
+    },
+    {
+      "name": "Run unittest",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/tests/RpiSoundTest",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb",
+      "preLaunchTask": "CMake: Build",
+      "logging": {
+        "trace": true,
+        "engineLogging": false,
+        "programOutput": true
+      },
+    },
+    {
+      "name": "Remote debug rpi_sound",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/RpiSound",
+      "args": [],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": true,
+      "targetArchitecture": "arm64",
+      "MIMode": "gdb",
+      "sourceFileMap": {
+        "/rpisound": "${workspaceFolder}"
+      },
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        },
+        {
+          "description": "set sysroot",
+          "text": "set sysroot ~/target-sysroot",
+          "ignoreFailures": false
+        }
+      ],
+      "miDebuggerServerAddress": "${input:remoteIp}:3333",
+      "miDebuggerPath": "/usr/bin/gdb-multiarch",
+      // "preLaunchTask": "start_debug",
+      // "postDebugTask": "postdebug"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "remoteIp",
+      "type": "command",
+      "command": "extension.commandvariable.file.content",
+      "args": {
+        "fileName": "${workspaceFolder}/scripts/.target",
+        "key": "TARGET_IP"
+      }
+    }
+  ]
+}

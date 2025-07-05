@@ -49,7 +49,7 @@ int main() {
     }
 
     // Select the first available device
-    if (!soundManager.selectAudioDevice(availableDevices.front())) {
+    if (!soundManager.selectAudioDevice(availableDevices[1])) {
         utilities::log.error("Failed to select audio device: {}", availableDevices.front().description);
         return -1;
     }

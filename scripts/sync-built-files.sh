@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-TEMP_FILE=".target"
+echo "Syncing built files to target..."
+SCRIPT_PATH=$(realpath "$0" | sed 's|\(.*\)/.*|\1|')
+TEMP_FILE="$SCRIPT_PATH/.target"
 
 # Function to get target configuration (username, IP, and password)
 get_target_config() {
@@ -36,4 +38,5 @@ get_target_config
 # Decode the password
 TARGET_PASSWORD=$(decode_password)
 
-rsync -avz --delete --mkpath --rsync-path="sudo rsync" ../build/ $TARGET_USERNAME@$TARGET_IP:/home/$USER/RpiSound/build/
+rsync -avz --mkpath --rsync-path="sudo rsync" $SCRIPT_PATH/../build $TARGET_USERNAME@$TARGET_IP:/home/$TARGET_USERNAME/RpiSound/
+rsync -avz --mkpath --rsync-path="sudo rsync" $SCRIPT_PATH/../sound $TARGET_USERNAME@$TARGET_IP:/home/$TARGET_USERNAME/RpiSound/build/
