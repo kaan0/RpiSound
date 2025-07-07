@@ -1,6 +1,6 @@
 #include "rpi_sound/alsa_driver.hpp"
 
-AlsaDriver::PcmHandle* AlsaDriver::pcmOpen(uint32_t card, uint32_t device, uint32_t flags, const PcmConfig* config) {
+AlsaDriver::PcmHandle* AlsaDriver::pcmOpen(uint32_t card, uint32_t device, Flags flags, const PcmConfig* config) {
     return pcm_open(card, device, flags, config);
 }
 
@@ -42,6 +42,10 @@ uint32_t AlsaDriver::pcmParamsGetMax(const PcmParams* params, PcmParam param) {
 
 uint32_t AlsaDriver::pcmParamsGetMin(const PcmParams* params, PcmParam param) {
     return pcm_params_get_min(params, param);
+}
+
+int32_t AlsaDriver::pcmTestFormat(PcmParams* params, PcmFormat format) {
+    return pcm_params_format_test(params, format);
 }
 
 uint32_t AlsaDriver::pcmFramesToBytes(const PcmHandle* pcm, uint32_t frames) {

@@ -42,23 +42,21 @@ int main() {
         return -1;
     }
 
-    // Print available devices
+    // Test available devices
     for (const auto& device : availableDevices) {
-        utilities::log.warning(
-            "Found device: {} (Card: {}, Device: {})", device.description, device.cardId, device.deviceId);
-    }
-
-    // Select the first available device
-    if (!soundManager.selectAudioDevice(availableDevices[1])) {
-        utilities::log.error("Failed to select audio device: {}", availableDevices.front().description);
-        return -1;
+        if (!soundManager.selectAudioDevice(device)) {
+            utilities::log.error("Failed to select audio device: {}", device.description);
+        } else {
+            utilities::log.info(
+                "Selected audio device: {} (Card: {}, Device: {})", device.description, device.cardId, device.deviceId);
+        }
     }
 
     // Trigger a sound sample
-    if (!soundManager.triggerSound("snare_0", 100)) {
-        utilities::log.error("Failed to trigger sound sample.");
-        return -1;
-    }
+    // if (!soundManager.triggerSound("snare_0", 100)) {
+    //     utilities::log.error("Failed to trigger sound sample.");
+    //     return -1;
+    // }
 
     return 0;
 }

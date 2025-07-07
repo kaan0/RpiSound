@@ -54,7 +54,7 @@ public:
      * @param config Configuration for the PCM device
      * @return PcmHandle* Handle to the opened PCM device, or nullptr on failure
      */
-    virtual PcmHandle* pcmOpen(uint32_t card, uint32_t device, uint32_t flags, const PcmConfig* config);
+    virtual PcmHandle* pcmOpen(uint32_t card, uint32_t device, Flags flags, const PcmConfig* config);
 
     virtual int pcmClose(PcmHandle* pcm);
 
@@ -76,6 +76,8 @@ public:
     virtual uint32_t pcmParamsGetMax(const PcmParams* params, PcmParam param);
 
     virtual uint32_t pcmParamsGetMin(const PcmParams* params, PcmParam param);
+
+    virtual int32_t pcmTestFormat(PcmParams* params, PcmFormat format);
 
     virtual uint32_t pcmFramesToBytes(const PcmHandle* pcm, uint32_t frames);
 

@@ -20,18 +20,6 @@ void AudioDeviceManager::initialize(std::unique_ptr<AlsaDriver> alsaDriver) {
 
     std::vector<types::AudioDeviceInfo> devices;
 
-    // Read the ALSA cards file
-    std::ifstream cardsFile{kCardsPath};
-    if (!cardsFile.good()) {
-        utilities::log.error("Failed to open ALSA cards file: {}", kCardsPath);
-        return;
-    }
-
-    if (!parseCardsFile(cardsFile, devices)) {
-        utilities::log.error("Failed to parse ALSA cards file.");
-        return;
-    }
-
     // Read the ALSA devices file
     std::ifstream devicesFile{kDevicesPath};
     if (!devicesFile.good()) {
@@ -44,12 +32,23 @@ void AudioDeviceManager::initialize(std::unique_ptr<AlsaDriver> alsaDriver) {
         return;
     }
 
-    for (auto& device : devices) {
+    // Read the ALSA cards file
+    std::ifstream cardsFile{kCardsPath};
+    if (!cardsFile.good()) {
+        utilities::log.error("Failed to open ALSA cards file: {}", kCardsPath);
+        return;
+    }
+
+    if (!parseCardsFile(cardsFile, devices)) {
+        utilities::log.error("Failed to parse ALSA cards file.");
+        return;
+    }
+
+    for (auto it = devices.begin(); it != devices.end();) {
         types::AudioDeviceInfo::DeviceFormat format;
-        if (getDeviceFormat(device.cardId, device.deviceId, device.type, format)) {
-            device.format = format;
-            utilities::log.info(
-                "Device found: {} (Card: {}, Device: {})", device.description, device.cardId, device.deviceId);
+        if (getDeviceFormat(it->cardId, it->deviceId, it->type, format)) {
+            it->format = format;
+            utilities::log.info("Device found: {} (Card: {}, Device: {})", it->description, it->cardId, it->deviceId);
             utilities::log.info(
                 "Format: {} Hz, {}, Channels: {}, Period Size: {}, Period Count: {}, Type: {}",
                 format.sampleRate,
@@ -60,11 +59,14 @@ void AudioDeviceManager::initialize(std::unique_ptr<AlsaDriver> alsaDriver) {
                 format.channelCount,
                 format.periodSize,
                 format.periodCount,
-                (device.type == types::AudioDeviceInfo::DeviceType::kPlayback  ? "Playback"
-                 : device.type == types::AudioDeviceInfo::DeviceType::kCapture ? "Capture"
-                                                                               : "Invalid"));
+                (it->type == types::AudioDeviceInfo::DeviceType::kPlayback  ? "Playback"
+                 : it->type == types::AudioDeviceInfo::DeviceType::kCapture ? "Capture"
+                                                                            : "Invalid"));
+            ++it;
         } else {
-            utilities::log.error("Failed to get device format for card {}, device {}", device.cardId, device.deviceId);
+            utilities::log.warning(
+                "Failed to get device format for card {}, device {}. Removing device.", it->cardId, it->deviceId);
+            it = devices.erase(it);
         }
     }
 
@@ -97,14 +99,12 @@ bool AudioDeviceManager::openDevice(const types::AudioDeviceInfo& deviceInfo) {
     }
 
     if (m_currentDevice && m_currentDevice->isOpen()) {
-        utilities::log.error("An audio device is already open. Please close it before opening a new one.");
-        return false;
+        utilities::log.warning("An audio device is already open. Closing the current device.");
     }
 
     m_currentDevice = std::make_unique<AudioDevice>(m_alsaDriver);
     if (!m_currentDevice->open(deviceInfo)) {
         utilities::log.error("Failed to open audio device: {}", m_currentDevice->getLastError());
-        m_currentDevice.reset();
         return false;
     }
     return true;
@@ -113,7 +113,6 @@ bool AudioDeviceManager::openDevice(const types::AudioDeviceInfo& deviceInfo) {
 void AudioDeviceManager::closeDevice() {
     if (m_currentDevice && m_currentDevice->isOpen()) {
         m_currentDevice->close();
-        m_currentDevice.reset();
     } else {
         utilities::log.warning("No audio device is currently open. Cannot close.");
     }
@@ -229,13 +228,13 @@ const types::AudioDeviceInfo::DeviceFormat& AudioDeviceManager::getDefaultDevice
     static types::AudioDeviceInfo::DeviceFormat defaultFormat{
         .periodSize = 1024,
         .periodCount = 2,
-        .startTreshold = 1024,        // periodSize
-        .stopTreshold = 1024 * 2,     // periodSize * periodCount
-        .silenceTreshold = 1024 * 2,  // periodSize * periodCount
+        .startTreshold = 1024,     // periodSize
+        .stopTreshold = 1024 * 2,  // periodSize * periodCount
+        .silenceTreshold = 0,
         .silenceSize = 0,
         .channelCount = 2,                                                  // Stereo
         .sampleRate = 44100,                                                // Common sample rate
-        .sampleFormat = types::AudioDeviceInfo::DeviceFormat::kFormatS16LE  // 16-bit signed little-endian
+        .sampleFormat = types::AudioDeviceInfo::DeviceFormat::kFormatS32LE  // 16-bit signed little-endian
     };
     return defaultFormat;
 }
@@ -244,22 +243,26 @@ bool AudioDeviceManager::getDeviceFormat(int32_t cardId,
                                          int32_t deviceId,
                                          types::AudioDeviceInfo::DeviceType type,
                                          types::AudioDeviceInfo::DeviceFormat& format) {
-    auto params = m_alsaDriver->pcmParamsGet(cardId, deviceId, type);
+    auto params = m_alsaDriver->pcmParamsGet(cardId, deviceId, AudioDevice::toAlsaFlag(type));
     if (!params) {
         return false;
     }
 
-    const auto mask = m_alsaDriver->pcmParamsGetMask(params, AlsaDriver::kParamFormat);
-    if (!mask) {
-        m_alsaDriver->pcmParamsFree(params);
-        return false;
-    }
+    auto sampleFormat = types::AudioDeviceInfo::DeviceFormat::kFormatInvalid;
+    std::vector<std::pair<AlsaDriver::PcmFormat, const char*>> pcmFormats = {
+        {AlsaDriver::kFormatS16LE, "16-bit signed little-endian"},
+        {AlsaDriver::kFormatS32LE, "32-bit signed little-endian"}};
 
-    auto logBuffer = std::ostringstream{};
-    for (auto& bit : mask->bits) {
-        logBuffer << bit << " ";
+    for (const auto& [pcmTestFormat, formatStr] : pcmFormats) {
+        auto testResult = m_alsaDriver->pcmTestFormat(params, pcmTestFormat);
+        if (testResult <= 0) {
+            utilities::log.warning(
+                "PCM format {} is not supported for card {}, device {}", formatStr, cardId, deviceId);
+            continue;
+        }
+        sampleFormat = static_cast<types::AudioDeviceInfo::DeviceFormat::SampleFormat>(pcmTestFormat);
+        break;  // Exit loop after finding a valid format
     }
-    utilities::log.debug("Available formats for card[{}] device[{}]: {}", cardId, deviceId, logBuffer.str());
 
     const auto defaultFormat = getDefaultDeviceFormat();
     format = {
@@ -274,7 +277,7 @@ bool AudioDeviceManager::getDeviceFormat(int32_t cardId,
         .channelCount =
             std::min(m_alsaDriver->pcmParamsGetMax(params, AlsaDriver::kParamChannels), defaultFormat.channelCount),
         .sampleRate = std::min(m_alsaDriver->pcmParamsGetMax(params, AlsaDriver::kParamRate), defaultFormat.sampleRate),
-        .sampleFormat = defaultFormat.sampleFormat};
+        .sampleFormat = sampleFormat};
     m_alsaDriver->pcmParamsFree(params);
     return true;
 }

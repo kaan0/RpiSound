@@ -33,11 +33,13 @@ public:
     // Error handling
     std::string getLastError() const;
 
-private:
-    AlsaDriver::PcmConfig createPcmConfig(const types::AudioDeviceInfo::DeviceFormat& format) const;
-    uint32_t toAlsaFlag(types::AudioDeviceInfo::DeviceType type) const {
+    // Device type conversion
+    static uint32_t toAlsaFlag(types::AudioDeviceInfo::DeviceType type) {
         return (type == types::AudioDeviceInfo::DeviceType::kPlayback) ? AlsaDriver::kPlayback : AlsaDriver::kCapture;
     }
+
+private:
+    AlsaDriver::PcmConfig createPcmConfig(const types::AudioDeviceInfo::DeviceFormat& format) const;
 
     std::shared_ptr<AlsaDriver> m_alsaDriver;
     AlsaDriver::PcmHandle* m_pcmHandle = nullptr;
