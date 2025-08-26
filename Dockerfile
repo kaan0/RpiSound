@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y \
     python3-numpy \
     gcc-aarch64-linux-gnu \
     g++-aarch64-linux-gnu \
+    libc6-dev-arm64-cross \
     clang-format \
     cppcheck \
     && apt-get clean
