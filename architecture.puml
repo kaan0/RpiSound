@@ -1,24 +1,40 @@
 @startuml
 ' ====== Interfaces ======
 interface ISoundLoader {
-    +load(filePath: std::string): bool
+    +load(filePath: std::string_view): bool
     +getSample(name: std::string_view): types::SoundSample&
 }
 
 interface ISoundManager {
-    +triggerSound(sampleName: std::string, velocity: int)
-    +setInstrument(instrumentType: std::string)
+    +initialize(): bool
+    +getAvailableAudioDevices(): std::vector<types::AudioDeviceInfo>
+    +selectAudioDevice(deviceInfo: types::AudioDeviceInfo&): bool
+    +load(instrumentType: std::string_view): bool
+    +triggerSound(sampleName: std::string_view, velocity: uint32_t): bool
 }
 
 interface IAudioDevice {
-    +open(deviceInfo: types::AudioDeviceInfo&, isCapture: bool): bool
+    +open(deviceInfo: types::AudioDeviceInfo&): bool
     +close()
     +isOpen(): bool
-    +write(audioData: types::audio_span_t): bool
-    +read(audioBuffer: types::audio_span_mut_t, framesToRead: size_t): bool
+    +write(audioData: types::audio_span_t&): bool
+    +read(audioBuffer: types::audio_span_mut_t&, framesToRead: size_t): bool
     +getBufferSize(): size_t
     +getAvailableFrames(): size_t
     +getLastError(): std::string
+}
+
+interface IAudioDeviceManager {
+    +initialize(alsaDriver: std::unique_ptr<AlsaDriver>): bool
+    +isInitialized(): bool
+    +getAvailableDevices(): std::vector<types::AudioDeviceInfo>&
+    +closeDevice()
+    +isDeviceOpen(): bool
+    +getCurrentDevice(): std::shared_ptr<IAudioDevice>
+}
+
+interface IAudioDriver {
+    +open(deviceInfo: types::AudioDeviceInfo&): bool
 }
 
 interface AlsaDriver {
@@ -27,6 +43,8 @@ interface AlsaDriver {
     +pcmWrite(pcm: PcmHandle*, data: void*, count: size_t): int
 }
 
+!ifdef FUTURE
+
 interface IMidiInputHandler {
     +onMidiEvent(event: MidiEvent)
 }
@@ -34,6 +52,8 @@ interface IMidiInputHandler {
 interface IEffect {
     +process(samples: types::audio_span_mut_t, channels: size_t)
 }
+
+!endif
 
 ' ====== Types Namespace ======
 namespace types {
@@ -100,13 +120,13 @@ class PCMLoader implements ISoundLoader {
     +getSample(name: std::string_view): types::SoundSample&
 }
 
-class SoundManager implements ISoundManager, IMidiInputHandler {
-    -loader: ISoundLoader*
-    -audioDevice: IAudioDevice*
+class SoundManager implements ISoundManager {
+    -m_soundLoader: ISoundLoader*
+    -m_audioDeviceManager: IAudioDeviceManager*
     -effectChain: EffectChain
     -ringBuffer: RingBuffer
-    +triggerSound(sampleName: std::string, velocity: int)
-    +setInstrument(instrumentType: std::string)
+    +triggerSound(sampleName: std::string, velocity: uint32_t)
+    +load(instrumentType: std::string_view): bool
     +onMidiEvent(event: types::MidiEvent)
 }
 
@@ -125,6 +145,21 @@ class AudioDevice implements IAudioDevice {
     +getAvailableFrames(): size_t
     +getLastError(): std::string
 }
+
+class AudioDeviceManager implements IAudioDeviceManager {
+    -m_alsaDriver: std::unique_ptr<AlsaDriver>
+    -m_currentDevice: std::shared_ptr<IAudioDevice>
+    -m_availableDevices: std::vector<types::AudioDeviceInfo>
+    -m_initialized: bool
+    +initialize(alsaDriver: std::unique_ptr<AlsaDriver>): bool
+    +isInitialized(): bool
+    +getAvailableDevices(): std::vector<types::AudioDeviceInfo>&
+    +closeDevice()
+    +isDeviceOpen(): bool
+    +getCurrentDevice(): std::shared_ptr<IAudioDevice>
+}
+
+!ifdef FUTURE
 
 class EffectChain {
     -effects: std::vector<IEffect*>
@@ -151,11 +186,15 @@ class RingBuffer {
     +read(data: int16_t*, n: size_t): bool
 }
 
-' ====== Relationships ======
-SoundManager --> ISoundLoader
-SoundManager --> IAudioDevice
 SoundManager --> EffectChain
 SoundManager --> RingBuffer
 EffectChain --> IEffect
-AudioDevice --> AlsaDriver : <<uses>>
+
+!endif
+
+' ====== Relationships ======
+SoundManager ..> ISoundLoader : <<Depends On>>
+SoundManager ..> IAudioDeviceManager : <<Depends On>>
+AudioDeviceManager ..> IAudioDevice : <<Depends On>>
+AudioDevice ..> AlsaDriver : <<Depends On>>
 @enduml

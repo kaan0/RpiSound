@@ -7,6 +7,10 @@ add_executable(RpiSoundTest
     unittest_alsa_driver.cpp
 )
 
+target_include_directories(RpiSoundTest PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/mocks
+)
+
 include(FetchContent)
 FetchContent_Declare(
   googletest

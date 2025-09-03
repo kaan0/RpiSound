@@ -21,7 +21,6 @@ public:
 
     // Trigger a sound sample by name and velocity
     // Returns true if the sound was successfully triggered, false otherwise
-    // Velocity is typically a value between 0 and 127, representing the intensity of the sound
-    // For example, a velocity of 0 means no sound, while 127 means
+    // Velocity is between 0 and 127, representing the intensity of the sound
     virtual bool triggerSound(const std::string_view sampleName, uint32_t velocity) = 0;
 };

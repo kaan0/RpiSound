@@ -72,6 +72,23 @@
         "codecvt": "cpp",
         "complex": "cpp",
         "list": "cpp",
-        "typeindex": "cpp"
+        "typeindex": "cpp",
+        "__config": "cpp",
+        "__node_handle": "cpp",
+        "__tree": "cpp",
+        "ios": "cpp",
+        "print": "cpp",
+        "__bit_reference": "cpp",
+        "__hash_table": "cpp",
+        "__locale": "cpp",
+        "__split_buffer": "cpp",
+        "__verbose_abort": "cpp",
+        "csignal": "cpp",
+        "execution": "cpp",
+        "forward_list": "cpp",
+        "locale": "cpp",
+        "queue": "cpp",
+        "stack": "cpp",
+        "filesystem": "cpp"
     }
 }

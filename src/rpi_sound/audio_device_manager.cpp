@@ -224,20 +224,7 @@ bool AudioDeviceManager::parseDevicesFile(std::istream& devicesFile,
     return isDeviceFound;
 }
 
-const types::AudioDeviceInfo::DeviceFormat& AudioDeviceManager::getDefaultDeviceFormat() const {
-    static types::AudioDeviceInfo::DeviceFormat defaultFormat{
-        .periodSize = 1024,
-        .periodCount = 2,
-        .startTreshold = 1024,     // periodSize
-        .stopTreshold = 1024 * 2,  // periodSize * periodCount
-        .silenceTreshold = 0,
-        .silenceSize = 0,
-        .channelCount = 2,                                                  // Stereo
-        .sampleRate = 44100,                                                // Common sample rate
-        .sampleFormat = types::AudioDeviceInfo::DeviceFormat::kFormatS32LE  // 16-bit signed little-endian
-    };
-    return defaultFormat;
-}
+
 
 bool AudioDeviceManager::getDeviceFormat(int32_t cardId,
                                          int32_t deviceId,

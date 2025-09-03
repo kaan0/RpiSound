@@ -4,67 +4,71 @@
 #include "rpi_sound/audio_device.hpp"
 #include "utilities/logger.hpp"
 
-AudioDevice::AudioDevice(std::shared_ptr<AlsaDriver> alsaDriver) : m_alsaDriver(std::move(alsaDriver)) {}
+AudioDevice::AudioDevice(IAudioDriver& audioDriver, const types::AudioDeviceInfo& deviceInfo) : m_audioDriver(audioDriver), m_deviceInfo(deviceInfo) {}
 
 AudioDevice::~AudioDevice() {
     close();
 }
 
 AudioDevice::AudioDevice(AudioDevice&& other) noexcept
-    : m_alsaDriver(std::move(other.m_alsaDriver)),
-      m_pcmHandle(other.m_pcmHandle),
-      m_deviceInfo(std::move(other.m_deviceInfo)),
-      m_lastError(std::move(other.m_lastError)) {
+    : m_audioDriver{other.m_audioDriver},
+      m_driverHandle{other.m_driverHandle},
+      m_deviceInfo{other.m_deviceInfo} {
 
-    other.m_pcmHandle = nullptr;
+    other.m_driverHandle = nullptr;
 }
 
 AudioDevice& AudioDevice::operator=(AudioDevice&& other) noexcept {
     if (this != &other) {
         close();
 
-        m_alsaDriver = std::move(other.m_alsaDriver);
-        m_pcmHandle = other.m_pcmHandle;
-        m_deviceInfo = std::move(other.m_deviceInfo);
-        m_lastError = std::move(other.m_lastError);
+        m_audioDriver = other.m_audioDriver;
+        m_driverHandle = other.m_driverHandle;
+        m_deviceInfo = other.m_deviceInfo;
 
-        other.m_pcmHandle = nullptr;
+        other.m_audioDriver = {};
+        other.m_driverHandle = nullptr;
+        other.m_deviceInfo = {};
+
     }
     return *this;
 }
 
-bool AudioDevice::open(const types::AudioDeviceInfo& deviceInfo) {
-    auto config{createPcmConfig(deviceInfo.format)};
-    m_pcmHandle = m_alsaDriver->pcmOpen(deviceInfo.cardId, deviceInfo.deviceId, toAlsaFlag(deviceInfo.type), &config);
-    if (!m_alsaDriver->pcmIsReady(m_pcmHandle)) {
-        m_lastError = m_alsaDriver->pcmGetError(m_pcmHandle);
-        m_pcmHandle = nullptr;
-        return false;
+Result<void> AudioDevice::open() {
+    if (isOpen()) {
+        utilities::log.warning("Audio device is already open.");
+        return std::unexpected("Audio device is already open.");
     }
-    m_deviceInfo = deviceInfo;
-    return true;
+
+    auto result = m_audioDriver.open(m_deviceInfo);
+    if (!result) {
+        utilities::log.error("Failed to open audio device: {}", result.error());
+        return std::unexpected(result.error());
+    }
+
+    m_driverHandle = result.value();
 }
 
-void AudioDevice::close() {
-    if (!m_pcmHandle) {
+Result<void> AudioDevice::close() {
+    if (!isOpen()) {
         utilities::log.warning("Audio device is not open. Nothing to close.");
-        return;
+        return std::unexpected("Audio device is not open. Nothing to close.");
     }
-    static_cast<void>(m_alsaDriver->pcmClose(m_pcmHandle));
-    m_pcmHandle = nullptr;
+    m_audioDriver.close(m_driverHandle);
+    m_driverHandle = nullptr;
     m_deviceInfo = {};
 }
 
-bool AudioDevice::isOpen() const {
-    if (!m_alsaDriver || !m_pcmHandle) {
+Result<bool> AudioDevice::isOpen() const {
+    if (!m_driverHandle) {
         return false;
     }
-    return m_alsaDriver->pcmIsReady(m_pcmHandle);
+    return m_audioDriver.isOpen(m_driverHandle);
 }
 
-bool AudioDevice::write(const types::audio_span_t& audioData) {
-    if (!m_pcmHandle || audioData.empty()) {
-        return false;
+Result<size_t> AudioDevice::write(const types::audio_span_t& audioData) {
+    if (!m_driverHandle || audioData.empty()) {
+        return std::unexpected("Invalid driver handle or empty audio data");
     }
 
     // Get buffer size in frames
@@ -104,28 +108,26 @@ bool AudioDevice::write(const types::audio_span_t& audioData) {
         auto chunk = audioData.subspan(samplesWritten, samplesToWrite);
 
         // pcmWrite expects data as bytes, but takes frame count as parameter
-        auto result = m_alsaDriver->pcmWrite(m_pcmHandle, reinterpret_cast<const char*>(chunk.data()), framesToWrite);
+        auto result = m_audioDriver.write(m_driverHandle, chunk);
 
-        if (result < 0) {
-            m_lastError = m_alsaDriver->pcmGetError(m_pcmHandle);
-            utilities::log.error("Failed to write {} frames to PCM device: {}", framesToWrite, m_lastError);
-            return false;
+        if (!result) {
+            utilities::log.error("Failed to write {} frames to PCM device: {}", framesToWrite, result.error());
+            return std::unexpected(result.error());
         }
 
         // result is the number of frames actually written
-        auto actualSamplesWritten = static_cast<size_t>(result) * samplesPerFrame;
+        auto actualSamplesWritten = static_cast<size_t>(result.value()) * samplesPerFrame;
         samplesWritten += actualSamplesWritten;
 
         // If we couldn't write the full chunk, we might need to wait or handle underrun
-        if (static_cast<size_t>(result) < framesToWrite) {
-            utilities::log.warning("Partial write: requested {} frames, wrote {} frames", framesToWrite, result);
+        if (static_cast<size_t>(result.value()) < framesToWrite) {
+            utilities::log.warning("Partial write: requested {} frames, wrote {} frames", framesToWrite, result.value());
 
             // Wait for the device to be ready for more data
-            auto waitResult = m_alsaDriver->pcmWait(m_pcmHandle, 1000);  // 1 second timeout
-            if (waitResult < 0) {
-                m_lastError = m_alsaDriver->pcmGetError(m_pcmHandle);
-                utilities::log.error("Failed to wait for PCM device: {}", m_lastError);
-                return false;
+            auto waitResult = m_audioDriver.wait(m_driverHandle, 1000);  // 1 second timeout
+            if (!waitResult) {
+                utilities::log.error("Failed to wait for PCM device: {}", waitResult.error());
+                return std::unexpected(waitResult.error());
             }
         }
     }
@@ -133,34 +135,20 @@ bool AudioDevice::write(const types::audio_span_t& audioData) {
     return true;
 }
 
-bool AudioDevice::read(types::audio_span_mut_t& audioBuffer, size_t framesToRead) {
-    // Empty implementation
+Result<size_t> AudioDevice::read(types::audio_span_mut_t& audioBuffer, size_t framesToRead) {
     return false;
 }
 
-size_t AudioDevice::getBufferSize() const {
-    return static_cast<size_t>(m_alsaDriver->pcmFramesToBytes(m_pcmHandle, m_deviceInfo.format.periodSize));
+Result<size_t> AudioDevice::getBufferSize() const {
+    if (!m_driverHandle) {
+        return std::unexpected("Driver handle is null");
+    }
+    return m_audioDriver.getBufferSize(m_driverHandle);
 }
 
-size_t AudioDevice::getAvailableFrames() const {
-    // Empty implementation
-    return 0;
-}
-
-std::string AudioDevice::getLastError() const {
-    return m_lastError;
-}
-
-AlsaDriver::PcmConfig AudioDevice::createPcmConfig(const types::AudioDeviceInfo::DeviceFormat& format) const {
-    AlsaDriver::PcmConfig config{.channels = format.channelCount,
-                                 .rate = format.sampleRate,
-                                 .period_size = format.periodSize,
-                                 .period_count = format.periodCount,
-                                 .format = static_cast<AlsaDriver::PcmFormat>(format.sampleFormat),
-                                 .start_threshold = format.startTreshold,
-                                 .stop_threshold = format.stopTreshold,
-                                 .silence_threshold = format.silenceTreshold,
-                                 .silence_size = format.silenceSize,
-                                 .avail_min = 0};
-    return config;
+Result<size_t> AudioDevice::getAvailableFrames() const {
+    if (!m_driverHandle) {
+        return std::unexpected("Driver handle is null");
+    }
+    return m_audioDriver.getAvailableFrames(m_driverHandle);
 }

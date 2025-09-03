@@ -2,12 +2,12 @@
 
 #include <memory>
 
-#include "alsa_driver.hpp"
-#include "iaudio_device.hpp"
+#include "interfaces/iaudio_driver.hpp"
+#include "interfaces/iaudio_device.hpp"
 
 class AudioDevice : public IAudioDevice {
 public:
-    explicit AudioDevice(std::shared_ptr<AlsaDriver> alsaDriver);
+    explicit AudioDevice(IAudioDriver& audioDriver, const types::AudioDeviceInfo& deviceInfo);
     ~AudioDevice();
 
     // Non-copyable
@@ -19,30 +19,19 @@ public:
     AudioDevice& operator=(AudioDevice&&) noexcept;
 
     // Device operations
-    bool open(const types::AudioDeviceInfo& deviceInfo) override;
-    void close() override;
-    bool isOpen() const override;
-    types::AudioDeviceInfo getDeviceInfo() const override { return m_deviceInfo; }
+    Result<void> open() override;
+    Result<void> close() noexcept override;
+    Result<bool> isOpen() const override;
+    types::AudioDeviceInfo& getDeviceInfo() const override;
 
     // Audio operations
-    bool write(const types::audio_span_t& audioData) override;
-    bool read(types::audio_span_mut_t& audioBuffer, size_t framesToRead) override;
-    size_t getBufferSize() const;
-    size_t getAvailableFrames() const;
-
-    // Error handling
-    std::string getLastError() const;
-
-    // Device type conversion
-    static uint32_t toAlsaFlag(types::AudioDeviceInfo::DeviceType type) {
-        return (type == types::AudioDeviceInfo::DeviceType::kPlayback) ? AlsaDriver::kPlayback : AlsaDriver::kCapture;
-    }
+    Result<size_t> write(const types::audio_span_t& audioData) override;
+    Result<size_t> read(types::audio_span_mut_t& audioBuffer, size_t framesToRead) override;
+    Result<size_t> getBufferSize() const override;
+    Result<size_t> getAvailableFrames() const override;
 
 private:
-    AlsaDriver::PcmConfig createPcmConfig(const types::AudioDeviceInfo::DeviceFormat& format) const;
-
-    std::shared_ptr<AlsaDriver> m_alsaDriver;
-    AlsaDriver::PcmHandle* m_pcmHandle = nullptr;
+    IAudioDriver& m_audioDriver;
+    HandlePtr m_driverHandle;
     types::AudioDeviceInfo m_deviceInfo;
-    std::string m_lastError;
 };
