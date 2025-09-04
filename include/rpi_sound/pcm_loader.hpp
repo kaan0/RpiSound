@@ -3,7 +3,7 @@
 #include <filesystem>
 #include <unordered_map>
 
-#include "isound_loader.hpp"
+#include "interfaces/isound_loader.hpp"
 
 class PcmLoader : public ISoundLoader {
 public:
@@ -19,7 +19,7 @@ public:
     static constexpr const char* kDataMarker = "PCM DATA";
 
     // Load sound samples from the specified instrument folder
-    bool load(const std::string& instrumentFolder) override;
+    bool load(std::string_view instrumentFolder) override;
 
     // Get the loaded sound sample for the specified file path
     const types::SoundSample& getSample(const std::string_view sampleName) const override;

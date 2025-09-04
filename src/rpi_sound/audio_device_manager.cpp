@@ -11,107 +11,74 @@ AudioDeviceManager& AudioDeviceManager::getInstance() {
     return instance;
 }
 
-void AudioDeviceManager::initialize(std::unique_ptr<AlsaDriver> alsaDriver) {
-    if (m_initialized) {
-        utilities::log.warning("AudioDeviceManager is already initialized.");
-    }
-    m_alsaDriver = std::move(alsaDriver);
-    m_initialized = true;
+void AudioDeviceManager::initialize(IAudioDeviceFactory& deviceFactory,
+                                    IDeviceEnumerator& deviceEnumerator,
+                                    IAudioDriver& audioDriver) {
 
-    std::vector<types::AudioDeviceInfo> devices;
+    m_deviceFactory = deviceFactory;
+    m_deviceEnumerator = deviceEnumerator;
+    m_audioDriver = audioDriver;
 
-    // Read the ALSA devices file
-    std::ifstream devicesFile{kDevicesPath};
-    if (!devicesFile.good()) {
-        utilities::log.error("Failed to open ALSA devices file: {}", kDevicesPath);
-        return;
+    // TODO: move paths to outside
+    auto playback_device_list_result = m_deviceEnumerator.list(types::AudioDeviceInfo::kPlayback, kCardsPath, kDevicesPath);
+    if (!playback_device_list_result) {
+        utilities::log.warning("No PlayBack devices found. Warning: {}", playback_device_list_result.error());
     }
 
-    if (!parseDevicesFile(devicesFile, devices)) {
-        utilities::log.error("Failed to parse ALSA devices file.");
-        return;
+    m_playbackDevices = std::move(playback_device_list_result.value());
+
+    auto capture_device_list_result = m_deviceEnumerator.list(types::AudioDeviceInfo::kCapture, kCardsPath, kDevicesPath);
+    if (!capture_device_list_result) {
+        utilities::log.warning("No Capture devices found. Warning: {}", capture_device_list_result.error());
     }
 
-    // Read the ALSA cards file
-    std::ifstream cardsFile{kCardsPath};
-    if (!cardsFile.good()) {
-        utilities::log.error("Failed to open ALSA cards file: {}", kCardsPath);
-        return;
-    }
+    m_captureDevices = std::move(capture_device_list_result.value());
 
-    if (!parseCardsFile(cardsFile, devices)) {
-        utilities::log.error("Failed to parse ALSA cards file.");
-        return;
-    }
-
-    for (auto it = devices.begin(); it != devices.end();) {
-        types::AudioDeviceInfo::DeviceFormat format;
-        if (getDeviceFormat(it->cardId, it->deviceId, it->type, format)) {
-            it->format = format;
-            utilities::log.info("Device found: {} (Card: {}, Device: {})", it->description, it->cardId, it->deviceId);
-            utilities::log.info(
-                "Format: {} Hz, {}, Channels: {}, Period Size: {}, Period Count: {}, Type: {}",
-                format.sampleRate,
-                (format.sampleFormat == types::AudioDeviceInfo::DeviceFormat::kFormatS16LE   ? "S16LE"
-                 : format.sampleFormat == types::AudioDeviceInfo::DeviceFormat::kFormatS32LE ? "S32LE"
-                 : format.sampleFormat == types::AudioDeviceInfo::DeviceFormat::kFormatFloat ? "FLOAT"
-                                                                                             : "UNKNOWN"),
-                format.channelCount,
-                format.periodSize,
-                format.periodCount,
-                (it->type == types::AudioDeviceInfo::DeviceType::kPlayback  ? "Playback"
-                 : it->type == types::AudioDeviceInfo::DeviceType::kCapture ? "Capture"
-                                                                            : "Invalid"));
-            ++it;
-        } else {
-            utilities::log.warning(
-                "Failed to get device format for card {}, device {}. Removing device.", it->cardId, it->deviceId);
-            it = devices.erase(it);
-        }
-    }
-
-    if (!devices.empty()) {
-        m_availableDevices = std::move(devices);
-    } else {
-        utilities::log.error("No audio devices found in ALSA cards or devices files.");
-    }
+    utilities::log.info("Found {} playback and {} capture devices.", m_playbackDevices.size(), m_captureDevices.size());
 }
 
 bool AudioDeviceManager::isInitialized() const {
-    return m_initialized && m_alsaDriver != nullptr;
+    return !(m_captureDevices.empty() && m_playbackDevices.empty());
 }
 
-std::vector<types::AudioDeviceInfo> AudioDeviceManager::getAvailableDevices() const {
-    return m_availableDevices;
+Result<std::vector<types::AudioDeviceInfo>> AudioDeviceManager::getAvailableDevices() const {
+    if (m_captureDevices.empty() && m_playbackDevices.empty()) {
+        return std::unexpected("No devices available.");
+    }
+
+    std::vector<types::AudioDeviceInfo> devices;
+    devices.reserve(m_captureDevices.size() + m_playbackDevices.size());
+    devices.insert(devices.end(), m_captureDevices.begin(), m_captureDevices.end());
+    devices.insert(devices.end(), m_playbackDevices.begin(), m_playbackDevices.end());
+
+    return devices;
 }
 
-types::AudioDeviceInfo AudioDeviceManager::getDevice() const {
+Result<std::shared_ptr<IAudioDevice>> AudioDeviceManager::getDevice() const {
     if (m_currentDevice) {
-        return m_currentDevice->getDeviceInfo();
+        return m_currentDevice;
     }
-    return types::AudioDeviceInfo{};
+    return std::unexpected("No devices to get.");
 }
 
-bool AudioDeviceManager::openDevice(const types::AudioDeviceInfo& deviceInfo) {
-    if (!m_initialized || !m_alsaDriver) {
-        utilities::log.error("AudioDeviceManager is not initialized.");
-        return false;
-    }
-
-    if (m_currentDevice && m_currentDevice->isOpen()) {
+Result<void> AudioDeviceManager::openDevice(const types::AudioDeviceInfo& deviceInfo) {
+    if (isDeviceOpen()) {
         utilities::log.warning("An audio device is already open. Closing the current device.");
     }
 
-    m_currentDevice = std::make_unique<AudioDevice>(m_alsaDriver);
-    if (!m_currentDevice->open(deviceInfo)) {
-        utilities::log.error("Failed to open audio device: {}", m_currentDevice->getLastError());
-        return false;
+    auto device_result = m_deviceFactory.createAudioDevice(deviceInfo, m_audioDriver);
+
+    if (!device_result) {
+        return std::unexpected("Could not create device. Error: " + device_result.error());
     }
-    return true;
+
+    m_currentDevice = std::move(device_result.value());
+
+    return {};
 }
 
-void AudioDeviceManager::closeDevice() {
-    if (m_currentDevice && m_currentDevice->isOpen()) {
+void AudioDeviceManager::closeDevice() noexcept {
+    if (isDeviceOpen()) {
         m_currentDevice->close();
     } else {
         utilities::log.warning("No audio device is currently open. Cannot close.");
@@ -120,151 +87,4 @@ void AudioDeviceManager::closeDevice() {
 
 bool AudioDeviceManager::isDeviceOpen() const {
     return m_currentDevice && m_currentDevice->isOpen();
-}
-
-/* cards:
- 0 [Headphones     ]: bcm2835_headpho - bcm2835 Headphones
-                      bcm2835 Headphones
- 1 [vc4hdmi0       ]: vc4-hdmi - vc4-hdmi-0
-                      vc4-hdmi-0
- 2 [vc4hdmi1       ]: vc4-hdmi - vc4-hdmi-1
-                      vc4-hdmi-1
- 3 [A4             ]: USB-Audio - AIR 192 4
-                      M-Audio AIR 192 4 at usb-0000:01:00.0-1.2, high speed
-*/
-bool AudioDeviceManager::parseCardsFile(std::istream& cardsFile, std::vector<types::AudioDeviceInfo>& devices) const {
-    std::regex lineRegex(R"(^\s(\d+)\s\[(\S+)\s*\]:\s+(\S+)\s+-\s+(.+)$)");
-    std::regex longnameRegex(R"(^\s+(.+)$)");
-
-    std::string line;
-    auto isDeviceFound{false};
-    std::vector<types::AudioDeviceInfo> deviceInfos;
-
-    while (std::getline(cardsFile, line)) {
-        std::smatch match;
-        types::AudioDeviceInfo deviceInfo;
-        if (std::regex_match(line, match, lineRegex)) {
-            deviceInfo.cardId = std::atoi(match[1].str().c_str());
-            deviceInfo.driver = match[2].str();
-            isDeviceFound = true;
-            deviceInfos.push_back(deviceInfo);
-        } else if (std::regex_match(line, match, longnameRegex)) {
-            deviceInfo.description = match[1].str();
-            if (!deviceInfos.empty()) {
-                // Update the last deviceInfo with the description
-                deviceInfos.back().description = deviceInfo.description;
-            } else {
-                utilities::log.error("No device info found for description: {}", deviceInfo.description);
-            }
-        }
-    }
-
-    if (!isDeviceFound) {
-        return false;
-    }
-    // Merge deviceInfos into devices
-    for (auto& device : devices) {
-        for (const auto& info : deviceInfos) {
-            if (device.cardId == info.cardId) {
-                device.driver = info.driver;
-                device.description = info.description;
-                break;  // Found the matching card, no need to continue
-            }
-        }
-    }
-
-    return true;
-}
-
-/* devices:
-  2: [ 0- 0]: digital audio playback
-  3: [ 0]   : control
-  4: [ 1- 0]: digital audio playback
-  5: [ 1]   : control
-  6: [ 2- 0]: digital audio playback
-  7: [ 2]   : control
-  8: [ 3- 0]: digital audio playback
-  9: [ 3- 0]: digital audio capture
- 10: [ 3]   : control
- 33:        : timer
-*/
-bool AudioDeviceManager::parseDevicesFile(std::istream& devicesFile,
-                                          std::vector<types::AudioDeviceInfo>& devices) const {
-    std::regex devicesRegex(R"(^\s+\d+:\s+\[\s*(.+)\-\s+(.+)\]\:\s+(.+)$)");
-    std::string playbackId{"digital audio playback"};
-    std::string captureId{"digital audio capture"};
-    std::string line;
-
-    auto isDeviceFound{false};
-    // TODO: solve cross-compile error with stoi
-    // TODO: rework match[magic_number]
-
-    while (std::getline(devicesFile, line)) {
-        std::smatch match;
-        if (std::regex_match(line, match, devicesRegex) && match.size() > 3) {
-            auto cardId{std::atoi(match[1].str().c_str())};
-            auto type{types::AudioDeviceInfo::DeviceType::kInvalid};
-            if (match[3].str() == playbackId) {
-                type = types::AudioDeviceInfo::DeviceType::kPlayback;
-            } else if (match[3].str() == captureId) {
-                type = types::AudioDeviceInfo::DeviceType::kCapture;
-            } else {
-                utilities::log.warning("Unknown device type: {}", match[3].str());
-                continue;  // Skip unknown device types
-            }
-            types::AudioDeviceInfo deviceInfo;
-            deviceInfo.cardId = cardId;
-            deviceInfo.type = type;
-            deviceInfo.deviceId = std::atoi(match[2].str().c_str());
-            devices.push_back(deviceInfo);
-            isDeviceFound = true;
-        }
-    }
-
-    return isDeviceFound;
-}
-
-
-
-bool AudioDeviceManager::getDeviceFormat(int32_t cardId,
-                                         int32_t deviceId,
-                                         types::AudioDeviceInfo::DeviceType type,
-                                         types::AudioDeviceInfo::DeviceFormat& format) {
-    auto params = m_alsaDriver->pcmParamsGet(cardId, deviceId, AudioDevice::toAlsaFlag(type));
-    if (!params) {
-        return false;
-    }
-
-    auto sampleFormat = types::AudioDeviceInfo::DeviceFormat::kFormatInvalid;
-    std::vector<std::pair<AlsaDriver::PcmFormat, const char*>> pcmFormats = {
-        {AlsaDriver::kFormatS16LE, "16-bit signed little-endian"},
-        {AlsaDriver::kFormatS32LE, "32-bit signed little-endian"}};
-
-    for (const auto& [pcmTestFormat, formatStr] : pcmFormats) {
-        auto testResult = m_alsaDriver->pcmTestFormat(params, pcmTestFormat);
-        if (testResult <= 0) {
-            utilities::log.warning(
-                "PCM format {} is not supported for card {}, device {}", formatStr, cardId, deviceId);
-            continue;
-        }
-        sampleFormat = static_cast<types::AudioDeviceInfo::DeviceFormat::SampleFormat>(pcmTestFormat);
-        break;  // Exit loop after finding a valid format
-    }
-
-    const auto defaultFormat = getDefaultDeviceFormat();
-    format = {
-        .periodSize =
-            std::max(m_alsaDriver->pcmParamsGetMin(params, AlsaDriver::kParamPeriodSize), defaultFormat.periodSize),
-        .periodCount =
-            std::max(m_alsaDriver->pcmParamsGetMin(params, AlsaDriver::kParamPeriodCount), defaultFormat.periodCount),
-        .startTreshold = defaultFormat.startTreshold,
-        .stopTreshold = defaultFormat.stopTreshold,
-        .silenceTreshold = defaultFormat.silenceTreshold,
-        .silenceSize = defaultFormat.silenceSize,
-        .channelCount =
-            std::min(m_alsaDriver->pcmParamsGetMax(params, AlsaDriver::kParamChannels), defaultFormat.channelCount),
-        .sampleRate = std::min(m_alsaDriver->pcmParamsGetMax(params, AlsaDriver::kParamRate), defaultFormat.sampleRate),
-        .sampleFormat = sampleFormat};
-    m_alsaDriver->pcmParamsFree(params);
-    return true;
 }

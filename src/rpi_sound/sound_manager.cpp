@@ -17,7 +17,11 @@ std::vector<types::AudioDeviceInfo> SoundManager::getAvailableAudioDevices() con
     if (!m_audioDeviceManager.isInitialized()) {
         return {};  // Audio device manager is not initialized
     }
-    return m_audioDeviceManager.getAvailableDevices();  // Return the list of available audio devices
+    auto devices_result = m_audioDeviceManager.getAvailableDevices();
+    if (!devices_result) {
+        {}
+    }
+    return devices_result.value();  // Return the list of available audio devices
 }
 
 bool SoundManager::selectAudioDevice(const types::AudioDeviceInfo& deviceInfo) {
@@ -29,11 +33,16 @@ bool SoundManager::selectAudioDevice(const types::AudioDeviceInfo& deviceInfo) {
                         deviceInfo.cardId,
                         deviceInfo.deviceId,
                         types::AudioDeviceInfo::to_string(deviceInfo.type));
-    return m_audioDeviceManager.openDevice(deviceInfo);  // Attempt to open the specified audio device
+    auto open_device_result = m_audioDeviceManager.openDevice(deviceInfo);
+    if (!open_device_result) {
+        utilities::log.error("Opening device failed: {}", open_device_result.error());
+        return false;
+    }
+    return true;
 }
 
 bool SoundManager::load(const std::string_view instrumentType) {
-    if (!m_soundLoader->load(std::string(instrumentType))) {
+    if (!m_soundLoader->load(instrumentType)) {
         return false;  // Failed to load sound samples
     }
     return true;  // Successfully loaded sound samples
@@ -46,7 +55,12 @@ bool SoundManager::triggerSound(const std::string_view sampleName, uint32_t velo
 
         utilities::log.info("Triggering sound: {} with velocity: {}", sampleName, velocity);
 
-        m_audioDeviceManager.getCurrentDevice()->write(sample.getAudioSpan());  // Write the audio data to the device
+        auto audio_device = m_audioDeviceManager.getDevice();
+        if (!audio_device) {
+            utilities::log.error("Device error: {}", audio_device.error());
+        }
+
+        audio_device.value()->write(sample.getAudioSpan());  // Write the audio data to the device
         return true;                                                            // Successfully triggered sound
     }
     return false;  // Sound sample not found

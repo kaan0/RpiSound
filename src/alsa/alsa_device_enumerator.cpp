@@ -6,28 +6,32 @@
 #include "utilities/logger.hpp"
 
 Result<std::vector<types::AudioDeviceInfo>> AlsaDeviceEnumerator::list(types::AudioDeviceInfo::DeviceType type,
-    std::string& cards_file, std::string& devices_file) {
+    std::string_view cards_file_path, std::string_view devices_file_path) {
 
-    std::ifstream devicesFile{devices_file};
+    // TODO: Fix unnecessary copy
+    auto devices_file_path_str{std::string(devices_file_path)};
+    std::ifstream devicesFile{devices_file_path_str};
     if (!devicesFile.good()) {
-        return std::unexpected("Failed to open ALSA devices file: " + devices_file);
+        return std::unexpected("Failed to open ALSA devices file: " + devices_file_path_str);
     }
 
-    std::ifstream cardsFile{cards_file};
+    // TODO: Fix unnecessary copy
+    auto cards_file_path_str{std::string(cards_file_path)};
+    std::ifstream cardsFile{cards_file_path_str};
     if (!cardsFile.good()) {
-        return std::unexpected("Failed to open ALSA cards file: " + cards_file);
+        return std::unexpected("Failed to open ALSA cards file: " + cards_file_path_str);
     }
 
     std::vector<types::AudioDeviceInfo> devices;
 
     // Parse the ALSA devices file
     if (auto result = parseDevicesFile(devicesFile, devices); !result) {
-        return std::unexpected("Failed to parse ALSA devices file: " + devices_file);
+        return std::unexpected("Failed to parse ALSA devices file: " + devices_file_path_str);
     }
 
     // Parse the ALSA cards file
     if (auto result = parseCardsFile(cardsFile, devices); !result) {
-        return std::unexpected("Failed to parse ALSA cards file: " + cards_file);
+        return std::unexpected("Failed to parse ALSA cards file: " + cards_file_path_str);
     }
 
     for (auto it = devices.begin(); it != devices.end();) {
@@ -35,6 +39,7 @@ Result<std::vector<types::AudioDeviceInfo>> AlsaDeviceEnumerator::list(types::Au
             utilities::log.warning(
                 "Failed to get device format for card {}, device {}. Removing device.", it->cardId, it->deviceId);
             it = devices.erase(it);
+        // TODO: fix type selection here
         } else {
             it->format = result.value();
             utilities::log.info("Device found: {} (Card: {}, Device: {})", it->description, it->cardId, it->deviceId);
@@ -62,6 +67,17 @@ Result<std::vector<types::AudioDeviceInfo>> AlsaDeviceEnumerator::list(types::Au
     return devices;
 }
 
+
+/* cards:
+ 0 [Headphones     ]: bcm2835_headpho - bcm2835 Headphones
+                      bcm2835 Headphones
+ 1 [vc4hdmi0       ]: vc4-hdmi - vc4-hdmi-0
+                      vc4-hdmi-0
+ 2 [vc4hdmi1       ]: vc4-hdmi - vc4-hdmi-1
+                      vc4-hdmi-1
+ 3 [A4             ]: USB-Audio - AIR 192 4
+                      M-Audio AIR 192 4 at usb-0000:01:00.0-1.2, high speed
+*/
 Result<void> AlsaDeviceEnumerator::parseCardsFile(std::istream& cardsFile, std::vector<types::AudioDeviceInfo>& devices) const {
     std::regex lineRegex(R"(^\s(\d+)\s\[(\S+)\s*\]:\s+(\S+)\s+-\s+(.+)$)");
     std::regex longnameRegex(R"(^\s+(.+)$)");
@@ -103,6 +119,20 @@ Result<void> AlsaDeviceEnumerator::parseCardsFile(std::istream& cardsFile, std::
         }
     }
 }
+
+
+/* devices:
+  2: [ 0- 0]: digital audio playback
+  3: [ 0]   : control
+  4: [ 1- 0]: digital audio playback
+  5: [ 1]   : control
+  6: [ 2- 0]: digital audio playback
+  7: [ 2]   : control
+  8: [ 3- 0]: digital audio playback
+  9: [ 3- 0]: digital audio capture
+ 10: [ 3]   : control
+ 33:        : timer
+*/
 
 Result<void> AlsaDeviceEnumerator::parseDevicesFile(std::istream& devicesFile, std::vector<types::AudioDeviceInfo>& devices) const {
     std::regex devicesRegex(R"(^\s+\d+:\s+\[\s*(.+)\-\s+(.+)\]\:\s+(.+)$)");

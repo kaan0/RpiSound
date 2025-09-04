@@ -47,7 +47,9 @@ FetchContent_MakeAvailable(tinyalsa)
 
 # Add library sources
 add_library(RpiSoundLib STATIC
-    ${CMAKE_SOURCE_DIR}/src/rpi_sound/alsa_driver.cpp
+    ${CMAKE_SOURCE_DIR}/src/alsa/alsa_device_enumerator.cpp
+    ${CMAKE_SOURCE_DIR}/src/alsa/alsa_driver.cpp
+    ${CMAKE_SOURCE_DIR}/src/alsa/alsa_facade.cpp
     ${CMAKE_SOURCE_DIR}/src/rpi_sound/audio_device_manager.cpp
     ${CMAKE_SOURCE_DIR}/src/rpi_sound/audio_device.cpp
     ${CMAKE_SOURCE_DIR}/src/rpi_sound/pcm_loader.cpp

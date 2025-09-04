@@ -22,7 +22,7 @@ public:
     Result<void> open() override;
     Result<void> close() noexcept override;
     Result<bool> isOpen() const override;
-    types::AudioDeviceInfo& getDeviceInfo() const override;
+    Result<types::AudioDeviceInfo> getDeviceInfo() const override;
 
     // Audio operations
     Result<size_t> write(const types::audio_span_t& audioData) override;

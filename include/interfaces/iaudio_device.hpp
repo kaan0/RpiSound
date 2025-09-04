@@ -16,7 +16,7 @@ public:
     virtual Result<void> open() = 0;
     virtual Result<void> close() noexcept = 0;
     virtual Result<bool> isOpen() const = 0;
-    virtual types::AudioDeviceInfo& getDeviceInfo() const = 0;
+    virtual Result<types::AudioDeviceInfo> getDeviceInfo() const = 0;
 
     // Audio operations
     virtual Result<size_t> write(const types::audio_span_t& audioData) = 0;

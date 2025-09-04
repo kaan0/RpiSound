@@ -6,8 +6,8 @@
 
 #include "interfaces/iaudio_driver.hpp"
 
-#include "alsa_facade.hpp"
-#include "alsa_utils.hpp"
+#include "alsa/alsa_facade.hpp"
+#include "alsa/alsa_utils.hpp"
 
 struct AlsaHandle final : IAudioHandle {
     explicit AlsaHandle(AlsaFacade::PcmHandle* pcm) : p{pcm} {}

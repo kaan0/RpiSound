@@ -1,8 +1,10 @@
 #include <iostream>
 #include <memory>
 
-#include "rpi_sound/alsa_driver.hpp"
+#include "alsa/alsa_driver.hpp"
+#include "alsa/alsa_device_enumerator.hpp"
 #include "rpi_sound/audio_device_manager.hpp"
+#include "rpi_sound/audio_device_factory.hpp"
 #include "rpi_sound/pcm_loader.hpp"
 #include "rpi_sound/sound_manager.hpp"
 #include "utilities/logger.hpp"
@@ -19,11 +21,13 @@ int main() {
     utilities::log.info("Starting Raspberry Pi Sound System…");
 
     // Initialize the ALSA driver
-    auto alsaDriver = std::make_unique<AlsaDriver>();
+    AlsaDriver alsaDriver;
+    AlsaDeviceEnumerator alsaEnumerator;
+    AudioDeviceFactory deviceFactory;
 
     // Initialize the audio device manager
     AudioDeviceManager& audioDeviceManager = AudioDeviceManager::getInstance();
-    audioDeviceManager.initialize(std::move(alsaDriver));
+    audioDeviceManager.initialize(deviceFactory, alsaEnumerator, alsaDriver);
 
     if (!audioDeviceManager.isInitialized()) {
         utilities::log.error("Failed to initialize Audio Device Manager.");

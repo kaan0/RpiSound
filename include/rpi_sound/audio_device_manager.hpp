@@ -2,14 +2,16 @@
 
 #include <memory>
 
-#include "alsa_driver.hpp"
-#include "iaudio_device.hpp"
-#include "iaudio_device_manager.hpp"
+#include "interfaces/iaudio_device.hpp"
+#include "interfaces/iaudio_driver.hpp"
+#include "interfaces/iaudio_device_manager.hpp"
+
+using namespace std::literals;
 
 class AudioDeviceManager : public IAudioDeviceManager {
 public:
-    static constexpr const char* kCardsPath = "/proc/asound/cards";      // Path to the ALSA cards file
-    static constexpr const char* kDevicesPath = "/proc/asound/devices";  // Path to the ALSA devices file
+    static constexpr std::string_view kCardsPath = "/proc/asound/cards"sv;      // Path to the ALSA cards file
+    static constexpr std::string_view kDevicesPath = "/proc/asound/devices"sv;  // Path to the ALSA devices file
 
     // Singleton instance retrieval
     static AudioDeviceManager& getInstance();
@@ -33,7 +35,7 @@ public:
     Result<std::vector<types::AudioDeviceInfo>> getAvailableDevices() const override;
 
     // Get the current audio device
-    Result<types::AudioDeviceInfo> getDevice() const override;
+    Result<std::shared_ptr<IAudioDevice>> getDevice() const override;
 
     // Open an audio device for playback or capture
     Result<void> openDevice(const types::AudioDeviceInfo& deviceInfo) override;
@@ -44,9 +46,6 @@ public:
     // Check if an audio device is currently open
     bool isDeviceOpen() const override;
 
-    // Get the currently opened audio device
-    Result<std::shared_ptr<IAudioDevice>> getDevice(const types::AudioDeviceInfo& deviceInfo) const override;
-
 private:
     // Private constructor for singleton pattern
     AudioDeviceManager() = default;
@@ -54,8 +53,9 @@ private:
     // Pointer to the currently opened audio device
     std::shared_ptr<IAudioDevice> m_currentDevice;
 
-    // List of available audio devices
-    std::vector<types::AudioDeviceInfo> m_availableDevices;
+    std::vector<types::AudioDeviceInfo> m_playbackDevices;
+
+    std::vector<types::AudioDeviceInfo> m_captureDevices;
 
     // Initialization flag
     bool m_initialized = false;

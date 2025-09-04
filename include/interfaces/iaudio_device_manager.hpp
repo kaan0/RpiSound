@@ -19,7 +19,7 @@ public:
     virtual Result<std::vector<types::AudioDeviceInfo>> getAvailableDevices() const = 0;
 
     // Get the current audio device
-    virtual Result<types::AudioDeviceInfo> getDevice() const = 0;
+    virtual Result<std::shared_ptr<IAudioDevice>> getDevice() const = 0;
 
     // Open an audio device for playback or capture
     virtual Result<void> openDevice(const types::AudioDeviceInfo& deviceInfo) = 0;
@@ -29,9 +29,6 @@ public:
 
     // Check if an audio device is currently open
     virtual bool isDeviceOpen() const = 0;
-
-    // Get the currently opened audio device
-    virtual Result<std::shared_ptr<IAudioDevice>> getDevice(const types::AudioDeviceInfo& deviceInfo) const = 0;
 
     // Destructor
     virtual ~IAudioDeviceManager() = default;

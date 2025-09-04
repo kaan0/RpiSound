@@ -7,7 +7,7 @@
 #include "rpi_sound/pcm_loader.hpp"
 #include "utilities/logger.hpp"
 
-bool PcmLoader::load(const std::string& instrumentFolder) {
+bool PcmLoader::load(std::string_view instrumentFolder) {
     auto rootPath{std::filesystem::path(kSoundDirectory) / std::filesystem::path(instrumentFolder)};
     if (!std::filesystem::exists(rootPath) || !std::filesystem::is_directory(rootPath)) {
         utilities::log.error("Instrument folder does not exist or is not a directory: {}", rootPath.string());

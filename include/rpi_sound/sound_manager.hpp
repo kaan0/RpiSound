@@ -2,9 +2,9 @@
 
 #include <memory>
 
-#include "iaudio_device_manager.hpp"
-#include "isound_loader.hpp"
-#include "isound_manager.hpp"
+#include "interfaces/iaudio_device_manager.hpp"
+#include "interfaces/isound_loader.hpp"
+#include "interfaces/isound_manager.hpp"
 
 class SoundManager : public ISoundManager {
 public:

@@ -7,7 +7,7 @@ using types::Result;
 class AlsaDeviceEnumerator final : public IDeviceEnumerator {
 public:
     Result<std::vector<types::AudioDeviceInfo>> list(types::AudioDeviceInfo::DeviceType type,
-    std::string& cards_file, std::string& devices_file) override;
+    std::string_view cards_file_path, std::string_view devices_file_path) override;
 
 private:
     Result<void> parseCardsFile(std::istream& cardsFile, std::vector<types::AudioDeviceInfo>& devices) const;

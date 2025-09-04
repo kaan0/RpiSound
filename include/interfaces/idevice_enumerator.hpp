@@ -12,5 +12,5 @@ public:
     virtual ~IDeviceEnumerator() = default;
 
     virtual Result<std::vector<types::AudioDeviceInfo>> list(types::AudioDeviceInfo::DeviceType type,
-    std::string& cards_file, std::string& devices_file) = 0;
+    std::string_view cards_file_path, std::string_view devices_file_path) = 0;
 };

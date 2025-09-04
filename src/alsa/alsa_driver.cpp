@@ -12,7 +12,7 @@ Result<HandlePtr> AlsaDriver::open(const types::AudioDeviceInfo& deviceInfo) {
     return HandlePtr{ new AlsaHandle{handle} };
 }
 
-void AlsaDriver::close(const HandlePtr& handle) {
+void AlsaDriver::close(const HandlePtr& handle) noexcept {
     if (auto* p = ph(handle)) {
         AlsaFacade::pcmClose(p);
         ah(handle).p = nullptr;

@@ -26,7 +26,6 @@ AudioDevice& AudioDevice::operator=(AudioDevice&& other) noexcept {
         m_driverHandle = other.m_driverHandle;
         m_deviceInfo = other.m_deviceInfo;
 
-        other.m_audioDriver = {};
         other.m_driverHandle = nullptr;
         other.m_deviceInfo = {};
 
@@ -49,7 +48,7 @@ Result<void> AudioDevice::open() {
     m_driverHandle = result.value();
 }
 
-Result<void> AudioDevice::close() {
+Result<void> AudioDevice::close() noexcept {
     if (!isOpen()) {
         utilities::log.warning("Audio device is not open. Nothing to close.");
         return std::unexpected("Audio device is not open. Nothing to close.");
@@ -64,6 +63,14 @@ Result<bool> AudioDevice::isOpen() const {
         return false;
     }
     return m_audioDriver.isOpen(m_driverHandle);
+}
+
+Result<types::AudioDeviceInfo> AudioDevice::getDeviceInfo() const {
+    if (!m_driverHandle) {
+        return std::unexpected("Device not open.");
+    }
+
+    return m_deviceInfo;
 }
 
 Result<size_t> AudioDevice::write(const types::audio_span_t& audioData) {
