@@ -26,8 +26,7 @@ int main() {
     AudioDeviceFactory deviceFactory;
 
     // Initialize the audio device manager
-    AudioDeviceManager& audioDeviceManager = AudioDeviceManager::getInstance();
-    audioDeviceManager.initialize(deviceFactory, alsaEnumerator, alsaDriver);
+    auto audioDeviceManager = AudioDeviceManager(deviceFactory, alsaEnumerator, alsaDriver);
 
     if (!audioDeviceManager.isInitialized()) {
         utilities::log.error("Failed to initialize Audio Device Manager.");

@@ -6,18 +6,12 @@
 #include "rpi_sound/audio_device_manager.hpp"
 #include "utilities/logger.hpp"
 
-AudioDeviceManager& AudioDeviceManager::getInstance() {
-    static AudioDeviceManager instance;
-    return instance;
-}
 
-void AudioDeviceManager::initialize(IAudioDeviceFactory& deviceFactory,
+AudioDeviceManager::AudioDeviceManager(IAudioDeviceFactory& deviceFactory,
                                     IDeviceEnumerator& deviceEnumerator,
-                                    IAudioDriver& audioDriver) {
-
-    m_deviceFactory = deviceFactory;
-    m_deviceEnumerator = deviceEnumerator;
-    m_audioDriver = audioDriver;
+                                    IAudioDriver& audioDriver) : m_deviceFactory{deviceFactory},
+                                    m_deviceEnumerator{deviceEnumerator},
+                                    m_audioDriver{audioDriver} {
 
     // TODO: move paths to outside
     auto playback_device_list_result = m_deviceEnumerator.list(types::AudioDeviceInfo::kPlayback, kCardsPath, kDevicesPath);

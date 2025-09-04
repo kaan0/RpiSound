@@ -8,10 +8,6 @@
 
 class IAudioDeviceManager {
 public:
-    virtual void initialize(IAudioDeviceFactory& deviceFactory,
-                            IDeviceEnumerator& deviceEnumerator,
-                            IAudioDriver& audioDriver) = 0;
-
     // Check if the manager is initialized
     virtual bool isInitialized() const = 0;
 

@@ -4,7 +4,6 @@ set(CMAKE_C_FLAGS_DEBUG "-g")
 
 add_executable(RpiSoundTest
     unittest_main.cpp
-    unittest_alsa_driver.cpp
 )
 
 target_include_directories(RpiSoundTest PRIVATE

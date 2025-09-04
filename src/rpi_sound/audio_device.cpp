@@ -46,6 +46,7 @@ Result<void> AudioDevice::open() {
     }
 
     m_driverHandle = result.value();
+    return {};
 }
 
 Result<void> AudioDevice::close() noexcept {
@@ -56,6 +57,8 @@ Result<void> AudioDevice::close() noexcept {
     m_audioDriver.close(m_driverHandle);
     m_driverHandle = nullptr;
     m_deviceInfo = {};
+
+    return {};
 }
 
 Result<bool> AudioDevice::isOpen() const {

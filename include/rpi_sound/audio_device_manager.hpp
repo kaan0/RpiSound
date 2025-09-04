@@ -13,8 +13,10 @@ public:
     static constexpr std::string_view kCardsPath = "/proc/asound/cards"sv;      // Path to the ALSA cards file
     static constexpr std::string_view kDevicesPath = "/proc/asound/devices"sv;  // Path to the ALSA devices file
 
-    // Singleton instance retrieval
-    static AudioDeviceManager& getInstance();
+    // Constructor
+    AudioDeviceManager(IAudioDeviceFactory& deviceFactory,
+                    IDeviceEnumerator& deviceEnumerator,
+                    IAudioDriver& audioDriver);
 
     // Destructor
     ~AudioDeviceManager() override = default;
@@ -22,11 +24,6 @@ public:
     // Delete copy constructor and assignment operator
     AudioDeviceManager(const AudioDeviceManager&) = delete;
     AudioDeviceManager& operator=(const AudioDeviceManager&) = delete;
-
-    // Initialize the manager with dependencies
-    void initialize(IAudioDeviceFactory& deviceFactory,
-                    IDeviceEnumerator& deviceEnumerator,
-                    IAudioDriver& audioDriver) override;
 
     // Check if the manager is initialized
     bool isInitialized() const override;
@@ -47,8 +44,6 @@ public:
     bool isDeviceOpen() const override;
 
 private:
-    // Private constructor for singleton pattern
-    AudioDeviceManager() = default;
 
     // Pointer to the currently opened audio device
     std::shared_ptr<IAudioDevice> m_currentDevice;
