@@ -55,11 +55,22 @@ int main() {
         }
     }
 
+    for (const auto& device : availableDevices) {
+        if ((device.description.find("Jabra EVOLVE LINK MS") == std::string::npos) || (device.type != types::AudioDeviceInfo::kPlayback)) {
+            continue;
+        }
+
+        if (!soundManager.selectAudioDevice(device)) {
+            utilities::log.error("Failed to select audio device: {}", device.description);
+        }
+        break;
+    }
+
     // Trigger a sound sample
-    // if (!soundManager.triggerSound("snare_0", 100)) {
-    //     utilities::log.error("Failed to trigger sound sample.");
-    //     return -1;
-    // }
+    if (!soundManager.triggerSound("kick_1", 100)) {
+        utilities::log.error("Failed to trigger sound sample.");
+        return -1;
+    }
 
     return 0;
 }

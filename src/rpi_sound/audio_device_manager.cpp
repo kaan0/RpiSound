@@ -68,7 +68,7 @@ Result<void> AudioDeviceManager::openDevice(const types::AudioDeviceInfo& device
 
     m_currentDevice = std::move(device_result.value());
 
-    return {};
+    return m_currentDevice->open();
 }
 
 void AudioDeviceManager::closeDevice() noexcept {

@@ -23,8 +23,8 @@ public:
     virtual Result<bool> isOpen(const HandlePtr&) const = 0;
 
     // Audio operations
-    virtual Result<size_t> write(const HandlePtr& handle, const types::audio_span_t& audioData) = 0;
-    virtual Result<size_t> read(const HandlePtr& handle, types::audio_span_mut_t& audioBuffer, size_t framesToRead) = 0;
+    virtual Result<size_t> write(const HandlePtr& handle, const types::AudioDeviceInfo& deviceInfo, const types::audio_span_t& audioData) = 0;
+    virtual Result<size_t> read(const HandlePtr& handle, const types::AudioDeviceInfo& deviceInfo, types::audio_span_mut_t& audioBuffer, size_t framesToRead) = 0;
     virtual Result<void> wait(const HandlePtr& handle, size_t timeoutMs) = 0;
     virtual Result<size_t> getBufferSize(const HandlePtr& handle) const = 0;
     virtual Result<size_t> getAvailableFrames(const HandlePtr& handle) const = 0;

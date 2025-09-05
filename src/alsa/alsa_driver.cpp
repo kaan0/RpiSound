@@ -26,22 +26,26 @@ Result<bool> AlsaDriver::isOpen(const HandlePtr& handle) const {
     return AlsaFacade::pcmIsReady(ph(handle));
 }
 
-Result<size_t> AlsaDriver::write(const HandlePtr& handle, const types::audio_span_t& audioData) {
+Result<size_t> AlsaDriver::write(const HandlePtr& handle, const types::AudioDeviceInfo& deviceInfo, const types::audio_span_t& audioData) {
     if (audioData.empty()) {
         return std::unexpected("Invalid audio data");
     } else if (!handle || !ph(handle)) {
         return std::unexpected("Invalid handle");
     }
 
-    auto writtenSamples{AlsaFacade::pcmWrite(ph(handle), reinterpret_cast<const void*>(audioData.data()), static_cast<uint32_t>(audioData.size()))};
-
-    if (writtenSamples < 0) {
-        return std::unexpected(std::string(AlsaFacade::pcmGetError(ph(handle))));
+    size_t remainingBytes{sizeof(types::audio_t) * audioData.size()};
+    size_t remainingFrames{AlsaFacade::pcmBytesToFrames(ph(handle), remainingBytes)};
+    auto writtenFrames{AlsaFacade::pcmWrite(ph(handle), reinterpret_cast<const void*>(audioData.data()), remainingFrames)};
+    if (writtenFrames < remainingFrames) {
+        return std::unexpected("Underrun occured.");
+    } else if (writtenFrames < 0) {
+        return std::unexpected("Writing to audio device failed.");
     }
-    return static_cast<size_t>(writtenSamples);
+
+    return remainingBytes;
 }
 
-Result<size_t> AlsaDriver::read(const HandlePtr& handle, types::audio_span_mut_t& audioBuffer, size_t framesToRead) {
+Result<size_t> AlsaDriver::read(const HandlePtr& handle, const types::AudioDeviceInfo& deviceInfo, types::audio_span_mut_t& audioBuffer, size_t framesToRead) {
     if (!handle || !ph(handle)) {
         return std::unexpected("Invalid handle");
     }

@@ -35,12 +35,11 @@ Result<std::vector<types::AudioDeviceInfo>> AlsaDeviceEnumerator::list(types::Au
     }
 
     for (auto it = devices.begin(); it != devices.end();) {
-        if (auto result = getDeviceFormat(*it); !result) {
+        auto result = getDeviceFormat(*it);
+        if (!result) {
             utilities::log.warning(
                 "Failed to get device format for card {}, device {}. Removing device.", it->cardId, it->deviceId);
-            it = devices.erase(it);
-        // TODO: fix type selection here
-        } else {
+        } else if (it->type == type) {
             it->format = result.value();
             utilities::log.info("Device found: {} (Card: {}, Device: {})", it->description, it->cardId, it->deviceId);
             utilities::log.info(
@@ -56,8 +55,11 @@ Result<std::vector<types::AudioDeviceInfo>> AlsaDeviceEnumerator::list(types::Au
                 (it->type == types::AudioDeviceInfo::DeviceType::kPlayback  ? "Playback"
                  : it->type == types::AudioDeviceInfo::DeviceType::kCapture ? "Capture"
                                                                             : "Invalid"));
-            ++it;
+        } else {
+            it = devices.erase(it);
+            continue;
         }
+        ++it;
     }
 
     if (devices.empty()) {
@@ -118,6 +120,8 @@ Result<void> AlsaDeviceEnumerator::parseCardsFile(std::istream& cardsFile, std::
             }
         }
     }
+
+    return {};
 }
 
 
@@ -169,6 +173,7 @@ Result<void> AlsaDeviceEnumerator::parseDevicesFile(std::istream& devicesFile, s
     if (!isDeviceFound) {
         return std::unexpected("No devices found in devices file");
     }
+    return {};
 }
 
 Result<types::AudioDeviceInfo::DeviceFormat> AlsaDeviceEnumerator::getDeviceFormat(const types::AudioDeviceInfo& deviceInfo) const {
