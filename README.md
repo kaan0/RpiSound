@@ -77,4 +77,7 @@ ffplay -autoexit -skip_initial_bytes 47 -f s16le -ch_layout stereo -ar 44100 ./s
 
 # get file format details with ffprobe
 ffprobe -v error -show_format -show_streams -print_format json ./sound/demo/tom_low/tom_low_0.pcm
+
+# Run clang-tidy
+find src include -type f \( -name '*.c' -o -name '*.cc' -o -name '*.cpp' -o -name '*.cxx' -o -name '*.h' -o -name '*.hpp' -o -name '*.hh' \) | xargs -r run-clang-tidy -p build/ -- -std=c++23 > report.txt
 ```
