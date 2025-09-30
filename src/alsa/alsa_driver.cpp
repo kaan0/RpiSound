@@ -1,7 +1,8 @@
 #include <algorithm>
 
+#include <spdlog/spdlog.h>
+
 #include "alsa/alsa_driver.hpp"
-#include "utilities/logger.hpp"
 
 Result<HandlePtr> AlsaDriver::open(const types::AudioDeviceInfo& deviceInfo) {
     auto config{alsa_utils::createPcmConfig(deviceInfo.format)};

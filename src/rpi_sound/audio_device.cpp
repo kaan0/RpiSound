@@ -1,8 +1,9 @@
 #include <iostream>
 #include <numeric>
 
+#include <spdlog/spdlog.h>
+
 #include "rpi_sound/audio_device.hpp"
-#include "utilities/logger.hpp"
 
 AudioDevice::AudioDevice(IAudioDriver& audioDriver, const types::AudioDeviceInfo& deviceInfo) : m_audioDriver{audioDriver}, m_deviceInfo{deviceInfo} {}
 
@@ -38,13 +39,13 @@ AudioDevice& AudioDevice::operator=(AudioDevice&& other) noexcept {
 
 Result<void> AudioDevice::open() {
     if (isOpen()) {
-        utilities::log.warning("Audio device is already open.");
+        spdlog::warn("Audio device is already open.");
         return std::unexpected("Audio device is already open.");
     }
 
     auto result = m_audioDriver.open(m_deviceInfo);
     if (!result) {
-        utilities::log.error("Failed to open audio device: {}", result.error());
+        spdlog::error("Failed to open audio device: {}", result.error());
         return std::unexpected(result.error());
     }
 
@@ -54,7 +55,7 @@ Result<void> AudioDevice::open() {
 
 Result<void> AudioDevice::close() noexcept {
     if (!isOpen()) {
-        utilities::log.warning("Audio device is not open. Nothing to close.");
+        spdlog::warn("Audio device is not open. Nothing to close.");
         return std::unexpected("Audio device is not open. Nothing to close.");
     }
     m_audioDriver.close(m_driverHandle);

@@ -45,6 +45,20 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(tinyalsa)
 
+FetchContent_Declare(
+    argparse
+    GIT_REPOSITORY https://github.com/p-ranav/argparse.git
+    GIT_TAG        v3.2
+)
+FetchContent_MakeAvailable(argparse)
+
+FetchContent_Declare(
+    spdlog
+    GIT_REPOSITORY https://github.com/gabime/spdlog.git
+    GIT_TAG        v1.15.3
+)
+FetchContent_MakeAvailable(spdlog)
+
 # Add library sources
 add_library(RpiSoundLib STATIC
     ${CMAKE_SOURCE_DIR}/src/alsa/alsa_device_enumerator.cpp
@@ -64,7 +78,7 @@ target_link_libraries(RpiSoundLib
     PRIVATE
         pthread
     PUBLIC
-        fmt
+        spdlog::spdlog_header_only
         tinyalsa)
 
 # Add the source files for standalone executable
@@ -73,7 +87,7 @@ target_include_directories(RpiSound PRIVATE
     ${CMAKE_SOURCE_DIR}/include
 )
 
-target_link_libraries(RpiSound PRIVATE RpiSoundLib)
+target_link_libraries(RpiSound PRIVATE RpiSoundLib argparse::argparse)
 
 if(BUILD_TESTS)
     add_subdirectory(tests)

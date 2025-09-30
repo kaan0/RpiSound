@@ -1,9 +1,10 @@
 #include <fstream>
 #include <regex>
 
+#include <spdlog/spdlog.h>
+
 #include "alsa/alsa_device_enumerator.hpp"
 #include "alsa/alsa_utils.hpp"
-#include "utilities/logger.hpp"
 
 Result<std::vector<types::AudioDeviceInfo>> AlsaDeviceEnumerator::list(types::AudioDeviceInfo::DeviceType type,
     std::string_view cards_file_path, std::string_view devices_file_path) {
@@ -37,12 +38,12 @@ Result<std::vector<types::AudioDeviceInfo>> AlsaDeviceEnumerator::list(types::Au
     for (auto it = devices.begin(); it != devices.end();) {
         auto result = getDeviceFormat(*it);
         if (!result) {
-            utilities::log.warning(
+            spdlog::warn(
                 "Failed to get device format for card {}, device {}. Removing device.", it->cardId, it->deviceId);
         } else if (it->type == type) {
             it->format = result.value();
-            utilities::log.info("Device found: {} (Card: {}, Device: {})", it->description, it->cardId, it->deviceId);
-            utilities::log.info(
+            spdlog::info("Device found: {} (Card: {}, Device: {})", it->description, it->cardId, it->deviceId);
+            spdlog::info(
                 "Format: {} Hz, {}, Channels: {}, Period Size: {}, Period Count: {}, Type: {}",
                 it->format.sampleRate,
                 (it->format.sampleFormat == types::AudioDeviceInfo::DeviceFormat::kFormatS16LE   ? "S16LE"
@@ -102,7 +103,7 @@ Result<void> AlsaDeviceEnumerator::parseCardsFile(std::istream& cardsFile, std::
                 // Update the last deviceInfo with the description
                 deviceInfos.back().description = deviceInfo.description;
             } else {
-                utilities::log.error("No device info found for description: {}", deviceInfo.description);
+                spdlog::error("No device info found for description: {}", deviceInfo.description);
             }
         }
     }
@@ -158,7 +159,7 @@ Result<void> AlsaDeviceEnumerator::parseDevicesFile(std::istream& devicesFile, s
             } else if (match[3].str() == captureId) {
                 type = types::AudioDeviceInfo::DeviceType::kCapture;
             } else {
-                utilities::log.warning("Unknown device type: {}", match[3].str());
+                spdlog::warn("Unknown device type: {}", match[3].str());
                 continue;  // Skip unknown device types
             }
             types::AudioDeviceInfo deviceInfo;
@@ -191,7 +192,7 @@ Result<types::AudioDeviceInfo::DeviceFormat> AlsaDeviceEnumerator::getDeviceForm
     for (const auto& [pcmTestFormat, formatStr] : formatMap) {
         auto testResult = AlsaFacade::pcmTestFormat(params, pcmTestFormat);
         if (testResult <= 0) {
-            utilities::log.warning(
+            spdlog::warn(
                 "PCM format {} is not supported for card {}, device {}", formatStr, deviceInfo.cardId, deviceInfo.deviceId);
             continue;
         }

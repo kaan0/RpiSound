@@ -1,7 +1,8 @@
 #include <iostream>
 
+#include <spdlog/spdlog.h>
+
 #include "rpi_sound/sound_manager.hpp"
-#include "utilities/logger.hpp"
 
 bool SoundManager::initialize() {
     if (!m_audioDeviceManager.isInitialized()) {
@@ -28,14 +29,14 @@ bool SoundManager::selectAudioDevice(const types::AudioDeviceInfo& deviceInfo) {
     if (!m_audioDeviceManager.isInitialized()) {
         return false;  // Audio device manager is not initialized
     }
-    utilities::log.info("Selecting audio device: {} (Card: {}, Device: {}, Type: {})",
+    spdlog::info("Selecting audio device: {} (Card: {}, Device: {}, Type: {})",
                         deviceInfo.description,
                         deviceInfo.cardId,
                         deviceInfo.deviceId,
                         types::AudioDeviceInfo::to_string(deviceInfo.type));
     auto open_device_result = m_audioDeviceManager.openDevice(deviceInfo);
     if (!open_device_result) {
-        utilities::log.error("Opening device failed: {}", open_device_result.error());
+        spdlog::error("Opening device failed: {}", open_device_result.error());
         return false;
     }
     return true;
@@ -53,11 +54,11 @@ bool SoundManager::triggerSound(const std::string_view sampleName, uint32_t velo
         // Trigger the sound sample with the specified name and velocity
         auto& sample = m_soundLoader->getSample(sampleName);
 
-        utilities::log.info("Triggering sound: {} with velocity: {}", sampleName, velocity);
+        spdlog::info("Triggering sound: {} with velocity: {}", sampleName, velocity);
 
         auto audio_device = m_audioDeviceManager.getDevice();
         if (!audio_device) {
-            utilities::log.error("Device error: {}", audio_device.error());
+            spdlog::error("Device error: {}", audio_device.error());
         }
 
         audio_device.value()->write(sample.getAudioSpan());  // Write the audio data to the device

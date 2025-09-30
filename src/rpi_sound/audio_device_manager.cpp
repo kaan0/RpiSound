@@ -2,9 +2,10 @@
 #include <iostream>
 #include <regex>
 
+#include <spdlog/spdlog.h>
+
 #include "rpi_sound/audio_device.hpp"
 #include "rpi_sound/audio_device_manager.hpp"
-#include "utilities/logger.hpp"
 
 
 AudioDeviceManager::AudioDeviceManager(IAudioDeviceFactory& deviceFactory,
@@ -16,19 +17,19 @@ AudioDeviceManager::AudioDeviceManager(IAudioDeviceFactory& deviceFactory,
     // TODO: move paths to outside
     auto playback_device_list_result = m_deviceEnumerator.list(types::AudioDeviceInfo::kPlayback, kCardsPath, kDevicesPath);
     if (!playback_device_list_result) {
-        utilities::log.warning("No PlayBack devices found. Warning: {}", playback_device_list_result.error());
+        spdlog::warn("No PlayBack devices found. Warning: {}", playback_device_list_result.error());
     }
 
     m_playbackDevices = std::move(playback_device_list_result.value());
 
     auto capture_device_list_result = m_deviceEnumerator.list(types::AudioDeviceInfo::kCapture, kCardsPath, kDevicesPath);
     if (!capture_device_list_result) {
-        utilities::log.warning("No Capture devices found. Warning: {}", capture_device_list_result.error());
+        spdlog::warn("No Capture devices found. Warning: {}", capture_device_list_result.error());
     }
 
     m_captureDevices = std::move(capture_device_list_result.value());
 
-    utilities::log.info("Found {} playback and {} capture devices.", m_playbackDevices.size(), m_captureDevices.size());
+    spdlog::info("Found {} playback and {} capture devices.", m_playbackDevices.size(), m_captureDevices.size());
 }
 
 bool AudioDeviceManager::isInitialized() const {
@@ -57,7 +58,7 @@ Result<std::shared_ptr<IAudioDevice>> AudioDeviceManager::getDevice() const {
 
 Result<void> AudioDeviceManager::openDevice(const types::AudioDeviceInfo& deviceInfo) {
     if (isDeviceOpen()) {
-        utilities::log.warning("An audio device is already open. Closing the current device.");
+        spdlog::warn("An audio device is already open. Closing the current device.");
     }
 
     auto device_result = m_deviceFactory.createAudioDevice(deviceInfo, m_audioDriver);
@@ -75,7 +76,7 @@ void AudioDeviceManager::closeDevice() noexcept {
     if (isDeviceOpen()) {
         m_currentDevice->close();
     } else {
-        utilities::log.warning("No audio device is currently open. Cannot close.");
+        spdlog::warn("No audio device is currently open. Cannot close.");
     }
 }
 
