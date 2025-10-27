@@ -24,6 +24,9 @@ public:
     // Get the loaded sound sample for the specified file path
     const types::SoundSample& getSample(const std::string_view sampleName) const override;
 
+    // Get all loaded sample names
+    std::vector<std::string> getSampleNames() const override;
+
     // Destructor
     ~PcmLoader() override = default;
 

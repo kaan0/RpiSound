@@ -21,6 +21,8 @@ public:
 
     std::vector<types::AudioDeviceInfo> getAvailableAudioDevices() const override;
 
+    std::vector<std::string> getAvailableSamples() const override { return m_soundLoader->getSampleNames(); }
+
     bool selectAudioDevice(const types::AudioDeviceInfo& deviceInfo) override;
 
     // Load sound samples from the specified instrument folder

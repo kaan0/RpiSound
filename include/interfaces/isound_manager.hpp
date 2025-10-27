@@ -19,6 +19,8 @@ public:
     // Returns true if the samples were successfully loaded, false otherwise
     virtual bool load(const std::string_view instrumentType) = 0;
 
+    virtual std::vector<std::string> getAvailableSamples() const = 0;
+
     // Trigger a sound sample by name and velocity
     // Returns true if the sound was successfully triggered, false otherwise
     // Velocity is between 0 and 127, representing the intensity of the sound

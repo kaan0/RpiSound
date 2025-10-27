@@ -45,6 +45,17 @@ const types::SoundSample& PcmLoader::getSample(const std::string_view sampleName
     return empty_sample;
 }
 
+std::vector<std::string> PcmLoader::getSampleNames() const {
+    std::vector<std::string> names;
+    names.reserve(m_samples.size());
+    
+    for (const auto& [name, _] : m_samples) {
+        names.push_back(name);
+    }
+    
+    return names;
+}
+
 // Get the sound sample for the specified file path
 bool PcmLoader::parseSample(const std::filesystem::path& filePath, types::SoundSample& sample) const {
     // Constants for validation

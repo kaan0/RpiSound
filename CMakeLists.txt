@@ -59,6 +59,13 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(spdlog)
 
+FetchContent_Declare(
+    ftxui
+    GIT_REPOSITORY https://github.com/ArthurSonzogni/FTXUI.git
+    GIT_TAG        v6.1.9
+)
+FetchContent_MakeAvailable(ftxui)
+
 # Add library sources
 add_library(RpiSoundLib STATIC
     ${CMAKE_SOURCE_DIR}/src/alsa/alsa_device_enumerator.cpp
@@ -82,12 +89,30 @@ target_link_libraries(RpiSoundLib
         tinyalsa)
 
 # Add the source files for standalone executable
-add_executable(RpiSound src/rpi_sound.cpp)
+add_executable(RpiSound
+    # src/rpi_sound.cpp
+    src/rpi_sound_ui.cpp
+)
 target_include_directories(RpiSound PRIVATE
     ${CMAKE_SOURCE_DIR}/include
 )
 
-target_link_libraries(RpiSound PRIVATE RpiSoundLib argparse::argparse)
+target_link_libraries(RpiSound
+    PRIVATE
+        RpiSoundLib
+        argparse::argparse
+        ftxui::screen
+        ftxui::dom
+        ftxui::component
+)
+
+# Copy sound folder to binary directory
+add_custom_command(TARGET RpiSound POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/sound
+        $<TARGET_FILE_DIR:RpiSound>/sound
+    COMMENT "Copying sound folder to binary directory"
+)
 
 if(BUILD_TESTS)
     add_subdirectory(tests)

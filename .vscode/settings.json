@@ -90,6 +90,8 @@
         "queue": "cpp",
         "stack": "cpp",
         "filesystem": "cpp",
-        "expected": "cpp"
-    }
+        "expected": "cpp",
+        "source_location": "cpp"
+    },
+    "C_Cpp.default.cppStandard": "c++23"
 }
