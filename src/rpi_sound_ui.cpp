@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <iostream>
 #include <memory>
 #include <string>
 #include <thread>
@@ -11,68 +12,78 @@
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/dom/elements.hpp>
 
+#include "alsa/alsa_device_enumerator.hpp"
+#include "alsa/alsa_driver.hpp"
+#include "rpi_sound/audio_device_factory.hpp"
+#include "rpi_sound/audio_device_manager.hpp"
+#include "rpi_sound/audio_engine.hpp"
+#include "rpi_sound/pcm_loader.hpp"
+#include "rpi_sound/sound_manager.hpp"
+
 using namespace ftxui;
+
+struct UICallbacks {
+    std::function<bool(int deviceIndex)> onDeviceSelected;
+    std::function<bool(int sampleIndex, int velocity)> onSoundTriggered;
+    std::function<void()> onQuit;
+};
 
 class RpiSoundUI {
 public:
-    RpiSoundUI()
-        : selectedDeviceIndex_(0),
-          selectedSampleIndex_(0),
-          velocityValue_(100),
-          statusMessage_("Ready - Select a device to start"),
-          lastTriggeredSound_(""),
-          deviceSelected_(false) {
+    RpiSoundUI(std::vector<std::string> deviceEntries, std::vector<std::string> sampleEntries, UICallbacks callbacks)
+        : m_selectedDeviceIndex(0),
+          m_selectedSampleIndex(0),
+          m_velocityValue(100),
+          m_statusMessage("Ready - Select a device to start"),
+          m_lastTriggeredSound(""),
+          m_deviceEntries(std::move(deviceEntries)),
+          m_sampleEntries(std::move(sampleEntries)),
+          m_callbacks(std::move(callbacks)),
+          m_deviceSelected(false) {}
 
-        // Dummy data for testing UI
-        deviceEntries_ = {
-            "0: USB Audio Device (Card: 0, Device: 0)",
-            "1: HDMI Audio Output (Card: 1, Device: 0)",
-            "2: Built-in Audio (Card: 2, Device: 0)",
-            "3: Bluetooth Speaker (Card: 3, Device: 0)",
-        };
-
-        sampleEntries_ = {
-            "0: kick",
-            "1: snare",
-            "2: hi_hat_closed",
-            "3: hi_hat_open",
-            "4: tom_low",
-            "5: tom_mid",
-            "6: tom_high",
-            "7: crash",
-            "8: ride",
-            "9: rim",
-        };
-    }
-
-    Component CreateUI() {
+    Component CreateUI(ScreenInteractive& screen) {
         // Device selection list
-        auto deviceMenu = Menu(&deviceEntries_, &selectedDeviceIndex_);
+        auto deviceMenu = Menu(&m_deviceEntries, &m_selectedDeviceIndex);
 
         // Sample list
-        auto sampleMenu = Menu(&sampleEntries_, &selectedSampleIndex_);
+        auto sampleMenu = Menu(&m_sampleEntries, &m_selectedSampleIndex);
 
         // Velocity slider
-        auto velocitySlider = Slider("Velocity: ", &velocityValue_, 0, 127, 1);
+        auto velocitySlider = Slider("Velocity: ", &m_velocityValue, 0, 127, 1);
 
         // Buttons
         auto selectDeviceButton = Button("Select Device", [this] {
-            deviceSelected_ = true;
-            statusMessage_ = "✓ Device selected: " + deviceEntries_[selectedDeviceIndex_];
+            if (m_callbacks.onDeviceSelected) {
+                if (!m_callbacks.onDeviceSelected(m_selectedDeviceIndex)) {
+                    m_statusMessage = "❌ Failed to select device: " + m_deviceEntries[m_selectedDeviceIndex];
+                    return;
+                } else {
+                    m_deviceSelected = true;
+                    m_statusMessage = "✓ Device selected: " + m_deviceEntries[m_selectedDeviceIndex];
+                    return;
+                }
+            }
         });
 
         auto triggerSoundButton = Button("Trigger Sound", [this] {
-            if (!deviceSelected_) {
-                statusMessage_ = "❌ Please select a device first";
+            if (!m_deviceSelected) {
+                m_statusMessage = "❌ Please select a device first";
                 return;
             }
 
-            lastTriggeredSound_ = sampleEntries_[selectedSampleIndex_];
-            statusMessage_ =
-                "♪ Playing: " + lastTriggeredSound_ + " (velocity: " + std::to_string(velocityValue_) + ")";
+            if (m_callbacks.onSoundTriggered) {
+                if (!m_callbacks.onSoundTriggered(m_selectedSampleIndex, m_velocityValue)) {
+                    m_statusMessage = "❌ Failed to play sample: " + m_sampleEntries[m_selectedSampleIndex];
+                    return;
+                } else {
+                    m_lastTriggeredSound = m_sampleEntries[m_selectedSampleIndex];
+                    m_statusMessage = "♪ Played sample: " + m_lastTriggeredSound;
+                    return;
+                }
+            }
         });
 
-        auto quitButton = Button("Quit", [this] { shouldExit_ = true; });
+        auto quitButton = Button("Quit", [&screen] { screen.ExitLoopClosure()(); });
 
         // Layout containers
         auto deviceContainer = Container::Vertical({
@@ -84,14 +95,24 @@ public:
                                }) |
                                border | size(WIDTH, EQUAL, 40);
 
-        auto sampleContainer = Container::Vertical({
-                                   Renderer([&] { return text("Available Samples") | bold | center; }),
-                                   Renderer([] { return separator(); }),
-                                   sampleMenu | flex,
-                                   Renderer([] { return separator(); }),
-                                   triggerSoundButton,
-                               }) |
-                               border | flex;
+        auto sampleContainer =
+            Container::Vertical({
+                Renderer([&] { return text("Available Samples") | bold | center; }),
+                Renderer([] { return separator(); }),
+                Renderer(sampleMenu, [sampleMenu] { return sampleMenu->Render() | vscroll_indicator | frame; }) | flex,
+                Renderer([] { return separator(); }),
+                triggerSoundButton,
+            }) |
+            border | flex;
+
+        auto midiMappingContainer =
+            Container::Vertical({
+                Renderer([&] { return text("MIDI Mappings") | bold | center; }),
+                Renderer([] { return separator(); }),
+                // Placeholder for future MIDI mapping UI elements
+                Renderer([] { return text("MIDI mapping UI coming soon...") | color(Color::Grey0); }) | flex,
+            }) |
+            border | flex;
 
         auto controlsContainer =
             Container::Vertical({
@@ -100,20 +121,20 @@ public:
                 Renderer([this] {
                     return hbox({
                         text("Velocity: "),
-                        text(std::to_string(velocityValue_)) | bold | color(Color::Yellow),
+                        text(std::to_string(m_velocityValue)) | bold | color(Color::Yellow),
                     });
                 }),
                 velocitySlider,
                 Renderer([] { return separator(); }),
                 Renderer([this] { return text("Device Status:") | bold; }),
                 Renderer([this] {
-                    return text(deviceSelected_ ? "✓ Connected" : "✗ Not connected") |
-                           color(deviceSelected_ ? Color::Green : Color::Red);
+                    return text(m_deviceSelected ? "✓ Connected" : "✗ Not connected") |
+                           color(m_deviceSelected ? Color::Green : Color::Red);
                 }),
                 Renderer([] { return separator(); }),
                 Renderer([this] { return text("Last Played:") | bold; }),
                 Renderer([this] {
-                    return text(lastTriggeredSound_.empty() ? "-" : lastTriggeredSound_) | color(Color::Magenta);
+                    return text(m_lastTriggeredSound.empty() ? "-" : m_lastTriggeredSound) | color(Color::Magenta);
                 }),
                 Renderer([] { return separator(); }),
                 Renderer([] { return vbox({}) | flex; }),
@@ -125,6 +146,7 @@ public:
         auto mainContainer = Container::Horizontal({
             deviceContainer,
             sampleContainer,
+            midiMappingContainer,
             controlsContainer,
         });
 
@@ -145,76 +167,92 @@ public:
                 // Status bar
                 hbox({
                     text(" Status: "),
-                    text(statusMessage_) | bold |
-                        color(statusMessage_.find("❌") != std::string::npos  ? Color::Red
-                              : statusMessage_.find("✓") != std::string::npos ? Color::Green
-                              : statusMessage_.find("♪") != std::string::npos ? Color::Yellow
-                                                                              : Color::White),
+                    text(m_statusMessage) | bold |
+                        color(m_statusMessage.find("❌") != std::string::npos  ? Color::Red
+                              : m_statusMessage.find("✓") != std::string::npos ? Color::Green
+                              : m_statusMessage.find("♪") != std::string::npos ? Color::Yellow
+                                                                               : Color::White),
                 }) | border |
                     color(Color::Cyan),
             });
         });
 
-        // component = component | CatchEvent([this](Event event) {
-        //                 if (event == Event::Character('q') || event == Event::Character('Q') || shouldExit_) {
-        //                     shouldExit_ = true;
-        //                     return true;
-        //                 }
-        //                 return false;
-        //             });
-
         return component;
     }
 
-    void Run() {
-        auto screen = ScreenInteractive::Fullscreen();
-        auto component = CreateUI();
-
-        std::atomic<bool> refresh_ui_continue = true;
-        std::thread refresh_ui([&] {
-            while (refresh_ui_continue) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                screen.PostEvent(Event::Custom);
-                if (shouldExit_) {
-                    screen.ExitLoopClosure()();
-                    break;
-                }
-            }
-        });
-
-        screen.Loop(component);
-        refresh_ui_continue = false;
-        refresh_ui.join();
-    }
-    bool shouldExit_ = false;
-
 private:
-    int selectedDeviceIndex_;
-    int selectedSampleIndex_;
-    int velocityValue_;
-    std::string statusMessage_;
-    std::string lastTriggeredSound_;
-    bool deviceSelected_;
+    int m_selectedDeviceIndex;
+    int m_selectedSampleIndex;
+    int m_velocityValue;
+    std::string m_statusMessage;
+    std::string m_lastTriggeredSound;
+    bool m_deviceSelected;
 
-    std::vector<std::string> deviceEntries_;
-    std::vector<std::string> sampleEntries_;
+    std::vector<std::string> m_deviceEntries;
+    std::vector<std::string> m_sampleEntries;
+    UICallbacks m_callbacks;
 };
 
 int main() {
-    // RpiSoundUI ui;
-    // ui.Run();
-    auto screen = ScreenInteractive::Fullscreen();
-    auto ui = RpiSoundUI();
-    auto app = ui.CreateUI();
+    AlsaDriver alsaDriver;
+    AlsaDeviceEnumerator alsaEnumerator;
+    AudioDeviceFactory deviceFactory;
 
-    app |= CatchEvent([&](Event event) {
-        if (event == Event::Character('q') || event == Event::Character('Q') || ui.shouldExit_) {
+    auto audioDeviceManager = AudioDeviceManager(deviceFactory, alsaEnumerator, alsaDriver);
+
+    if (!audioDeviceManager.isInitialized()) {
+        std::cerr << "Failed to initialize Audio Device Manager." << std::endl;
+        return -1;
+    }
+
+    SoundManager soundManager(std::make_unique<PcmLoader>(), audioDeviceManager, createAudioEngine(20971520, 2048));
+
+    if (!soundManager.initialize()) {
+        std::cerr << "Failed to initialize Sound Manager." << std::endl;
+        return -1;
+    }
+
+    auto availableDevices = soundManager.getAvailableAudioDevices();
+    auto availableDeviceDescriptions = soundManager.getAvailableAudioDeviceDescriptions();
+    if (availableDevices.empty()) {
+        std::cerr << "No audio devices available." << std::endl;
+        return -1;
+    }
+
+    if (!soundManager.load("demo")) {
+        std::cerr << "Failed to load instrument samples." << std::endl;
+        return -1;
+    }
+
+    auto samples = soundManager.getAvailableSamples();
+
+    UICallbacks uiCallbacks;
+    uiCallbacks.onDeviceSelected = [&soundManager, &availableDevices](int deviceIndex) -> bool {
+        if (deviceIndex >= 0 && deviceIndex < static_cast<int>(availableDevices.size())) {
+            return soundManager.selectAudioDevice(availableDevices[deviceIndex]);
+        }
+        return false;
+    };
+
+    uiCallbacks.onSoundTriggered = [&soundManager, &samples](int sampleIndex, int velocity) -> bool {
+        if (sampleIndex >= 0 && sampleIndex < static_cast<int>(samples.size())) {
+            return soundManager.triggerSound(samples[sampleIndex], static_cast<uint32_t>(velocity));
+        }
+        return false;
+    };
+
+    auto screen = ScreenInteractive::Fullscreen();
+    auto app = RpiSoundUI(availableDeviceDescriptions, samples, uiCallbacks);
+    auto ui = app.CreateUI(screen);
+
+    ui |= CatchEvent([&](Event event) {
+        if (event == Event::Character('q') || event == Event::Character('Q')) {
             screen.ExitLoopClosure()();
             return true;
         }
         return false;
     });
 
-    screen.Loop(app);
+    screen.Loop(ui);
     return 0;
 }

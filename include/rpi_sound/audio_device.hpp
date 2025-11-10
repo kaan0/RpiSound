@@ -2,13 +2,13 @@
 
 #include <memory>
 
-#include "interfaces/iaudio_driver.hpp"
 #include "interfaces/iaudio_device.hpp"
+#include "interfaces/iaudio_driver.hpp"
 
 class AudioDevice : public IAudioDevice {
 public:
     explicit AudioDevice(IAudioDriver& audioDriver, const types::AudioDeviceInfo& deviceInfo);
-    ~AudioDevice();
+    ~AudioDevice() override;
 
     // Non-copyable
     AudioDevice(const AudioDevice&) = delete;

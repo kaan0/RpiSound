@@ -3,6 +3,7 @@
 #include <memory>
 
 #include "interfaces/iaudio_device_manager.hpp"
+#include "interfaces/iaudio_engine.hpp"
 #include "interfaces/isound_loader.hpp"
 #include "interfaces/isound_manager.hpp"
 
@@ -11,8 +12,12 @@ public:
     static constexpr const char* kDefaultInstrumentType = "demo";
 
     // Constructor that initializes the sound loader and audio device manager
-    SoundManager(std::unique_ptr<ISoundLoader> soundLoader, IAudioDeviceManager& audioDeviceManager)
-        : m_soundLoader(std::move(soundLoader)), m_audioDeviceManager(audioDeviceManager) {}
+    SoundManager(std::unique_ptr<ISoundLoader> soundLoader,
+                 IAudioDeviceManager& audioDeviceManager,
+                 std::unique_ptr<IAudioEngine> audioEngine)
+        : m_soundLoader(std::move(soundLoader)),
+          m_audioDeviceManager(audioDeviceManager),
+          m_audioEngine(std::move(audioEngine)) {}
 
     // Destructor
     ~SoundManager() override = default;
@@ -20,6 +25,8 @@ public:
     bool initialize() override;
 
     std::vector<types::AudioDeviceInfo> getAvailableAudioDevices() const override;
+
+    std::vector<std::string> getAvailableAudioDeviceDescriptions() const override;
 
     std::vector<std::string> getAvailableSamples() const override { return m_soundLoader->getSampleNames(); }
 
@@ -37,4 +44,7 @@ private:
 
     // Reference to the audio device instance
     IAudioDeviceManager& m_audioDeviceManager;
+
+    // Pointer to the audio engine
+    std::unique_ptr<IAudioEngine> m_audioEngine;
 };

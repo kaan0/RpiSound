@@ -73,6 +73,7 @@ add_library(RpiSoundLib STATIC
     ${CMAKE_SOURCE_DIR}/src/alsa/alsa_facade.cpp
     ${CMAKE_SOURCE_DIR}/src/rpi_sound/audio_device_manager.cpp
     ${CMAKE_SOURCE_DIR}/src/rpi_sound/audio_device.cpp
+    ${CMAKE_SOURCE_DIR}/src/rpi_sound/audio_engine.cpp
     ${CMAKE_SOURCE_DIR}/src/rpi_sound/pcm_loader.cpp
     ${CMAKE_SOURCE_DIR}/src/rpi_sound/sound_manager.cpp
 )

@@ -20,9 +20,20 @@ std::vector<types::AudioDeviceInfo> SoundManager::getAvailableAudioDevices() con
     }
     auto devices_result = m_audioDeviceManager.getAvailableDevices();
     if (!devices_result) {
-        {}
+        return {};
     }
+
     return devices_result.value();  // Return the list of available audio devices
+}
+
+std::vector<std::string> SoundManager::getAvailableAudioDeviceDescriptions() const {
+    std::vector<types::AudioDeviceInfo> devices = getAvailableAudioDevices();
+
+    std::vector<std::string> deviceDescriptions;
+    for (const auto& device : devices) {
+        deviceDescriptions.push_back(device.description);
+    }
+    return deviceDescriptions;  // Return the list of available audio device descriptions
 }
 
 bool SoundManager::selectAudioDevice(const types::AudioDeviceInfo& deviceInfo) {
@@ -30,15 +41,23 @@ bool SoundManager::selectAudioDevice(const types::AudioDeviceInfo& deviceInfo) {
         return false;  // Audio device manager is not initialized
     }
     spdlog::info("Selecting audio device: {} (Card: {}, Device: {}, Type: {})",
-                        deviceInfo.description,
-                        deviceInfo.cardId,
-                        deviceInfo.deviceId,
-                        types::AudioDeviceInfo::to_string(deviceInfo.type));
+                 deviceInfo.description,
+                 deviceInfo.cardId,
+                 deviceInfo.deviceId,
+                 types::AudioDeviceInfo::to_string(deviceInfo.type));
     auto open_device_result = m_audioDeviceManager.openDevice(deviceInfo);
     if (!open_device_result) {
         spdlog::error("Opening device failed: {}", open_device_result.error());
         return false;
     }
+    auto audio_device = m_audioDeviceManager.getDevice();
+    if (!audio_device) {
+        spdlog::error("Device error: {}", audio_device.error());
+    }
+    if (m_audioEngine->isRunning()) {
+        m_audioEngine->stop();
+    }
+    m_audioEngine->start(std::move(audio_device.value()));
     return true;
 }
 
@@ -56,13 +75,9 @@ bool SoundManager::triggerSound(const std::string_view sampleName, uint32_t velo
 
         spdlog::info("Triggering sound: {} with velocity: {}", sampleName, velocity);
 
-        auto audio_device = m_audioDeviceManager.getDevice();
-        if (!audio_device) {
-            spdlog::error("Device error: {}", audio_device.error());
-        }
+        m_audioEngine->writeSample(sample.getAudioSpan());
 
-        audio_device.value()->write(sample.getAudioSpan());  // Write the audio data to the device
-        return true;                                                            // Successfully triggered sound
+        return true;  // Successfully triggered sound
     }
     return false;  // Sound sample not found
 }

@@ -13,6 +13,8 @@ public:
 
     virtual std::vector<types::AudioDeviceInfo> getAvailableAudioDevices() const = 0;
 
+    virtual std::vector<std::string> getAvailableAudioDeviceDescriptions() const = 0;
+
     virtual bool selectAudioDevice(const types::AudioDeviceInfo& deviceInfo) = 0;
 
     // Load sound samples from the specified instrument folder
