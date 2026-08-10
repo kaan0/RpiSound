@@ -14,11 +14,12 @@ bool SoundManager::initialize() {
     return true;  // Successfully initialized sound manager
 }
 
-std::vector<types::AudioDeviceInfo> SoundManager::getAvailableAudioDevices() const {
+std::vector<types::AudioDeviceInfo> SoundManager::getAvailableAudioDevices(
+    types::AudioDeviceInfo::DeviceType type) const {
     if (!m_audioDeviceManager.isInitialized()) {
         return {};  // Audio device manager is not initialized
     }
-    auto devices_result = m_audioDeviceManager.getAvailableDevices();
+    auto devices_result = m_audioDeviceManager.getAvailableDevices(type);
     if (!devices_result) {
         return {};
     }
@@ -26,12 +27,15 @@ std::vector<types::AudioDeviceInfo> SoundManager::getAvailableAudioDevices() con
     return devices_result.value();  // Return the list of available audio devices
 }
 
-std::vector<std::string> SoundManager::getAvailableAudioDeviceDescriptions() const {
-    std::vector<types::AudioDeviceInfo> devices = getAvailableAudioDevices();
+std::vector<std::string> SoundManager::getAvailableAudioDeviceDescriptions(
+    types::AudioDeviceInfo::DeviceType type) const {
+    std::vector<types::AudioDeviceInfo> devices = getAvailableAudioDevices(type);
 
     std::vector<std::string> deviceDescriptions;
     for (const auto& device : devices) {
-        deviceDescriptions.push_back(device.description);
+        if (device.type == type || type == types::AudioDeviceInfo::kAll) {
+            deviceDescriptions.push_back(device.description);
+        }
     }
     return deviceDescriptions;  // Return the list of available audio device descriptions
 }
@@ -69,15 +73,14 @@ bool SoundManager::load(const std::string_view instrumentType) {
 }
 
 bool SoundManager::triggerSound(const std::string_view sampleName, uint32_t velocity) {
-    if (!m_soundLoader->getSample(sampleName).audioData.empty()) {
-        // Trigger the sound sample with the specified name and velocity
-        auto& sample = m_soundLoader->getSample(sampleName);
-
-        spdlog::info("Triggering sound: {} with velocity: {}", sampleName, velocity);
-
-        m_audioEngine->writeSample(sample.getAudioSpan());
-
-        return true;  // Successfully triggered sound
+    auto sample = m_soundLoader->getSample(sampleName);
+    if (!sample || sample->audioData.empty()) {
+        return false;  // Sample not found or has no data
     }
-    return false;  // Sound sample not found
+
+    const float gain = static_cast<float>(velocity) / 127.0f;
+    spdlog::info("Triggering sound: {} with velocity: {}", sampleName, velocity);
+
+    m_audioEngine->writeSample(std::move(sample), gain);
+    return true;
 }

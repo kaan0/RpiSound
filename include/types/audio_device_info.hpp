@@ -8,21 +8,9 @@
 namespace types {
 
 struct AudioDeviceInfo {
-    enum DeviceType { kInvalid, kPlayback, kCapture };
-    // Convert DeviceType to string
-    static std::string to_string(DeviceType type) {
-        switch (type) {
-            case kInvalid:
-                return "Invalid";
-            case kPlayback:
-                return "Playback";
-            case kCapture:
-                return "Capture";
-            default:
-                return "Unknown";
-        }
-    }
+    enum DeviceType { kInvalid, kPlayback, kCapture, kAll };
     struct DeviceFormat {
+
         enum SampleFormat {
             kFormatInvalid = -1,  // Invalid format
             kFormatS16LE = 0,     // 16-bit signed little-endian
@@ -45,6 +33,34 @@ struct AudioDeviceInfo {
     DeviceFormat format;
     std::string driver;
     std::string description;
+    // Convert DeviceFormat to string
+    static std::string to_string(DeviceFormat::SampleFormat format) {
+        switch (format) {
+            case DeviceFormat::SampleFormat::kFormatInvalid:
+                return "Invalid";
+            case DeviceFormat::SampleFormat::kFormatS16LE:
+                return "16-bit signed little-endian";
+            case DeviceFormat::SampleFormat::kFormatS32LE:
+                return "32-bit signed little-endian";
+            case DeviceFormat::SampleFormat::kFormatFloat:
+                return "32-bit floating point";
+            default:
+                return "Unknown";
+        }
+    }
+    // Convert DeviceType to string
+    static std::string to_string(DeviceType type) {
+        switch (type) {
+            case kInvalid:
+                return "Invalid";
+            case kPlayback:
+                return "Playback";
+            case kCapture:
+                return "Capture";
+            default:
+                return "Unknown";
+        }
+    }
 };
 
 }  // namespace types

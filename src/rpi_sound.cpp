@@ -1,371 +1,448 @@
+#include <algorithm>
+#include <atomic>
 #include <chrono>
-#include <functional>
-#include <iomanip>
+#include <concepts>
+#include <format>
 #include <iostream>
 #include <memory>
-#include <sstream>
+#include <optional>
+#include <span>
+#include <string>
 #include <thread>
-#include <unordered_map>
+#include <vector>
 
-#include <spdlog/spdlog.h>
-#include <argparse/argparse.hpp>
+#include <ftxui/component/captured_mouse.hpp>
+#include <ftxui/component/component.hpp>
+#include <ftxui/component/screen_interactive.hpp>
+#include <ftxui/dom/elements.hpp>
 
+#if defined(USE_COREAUDIO)
+#include "core_audio/core_audio_device_enumerator.hpp"
+#include "core_audio/core_audio_driver.hpp"
+#else
 #include "alsa/alsa_device_enumerator.hpp"
 #include "alsa/alsa_driver.hpp"
+#endif
+
 #include "rpi_sound/audio_device_factory.hpp"
 #include "rpi_sound/audio_device_manager.hpp"
+#include "rpi_sound/audio_engine.hpp"
 #include "rpi_sound/pcm_loader.hpp"
 #include "rpi_sound/sound_manager.hpp"
 
-// Command context to pass state to commands
-struct CommandContext {
-    SoundManager& soundManager;
-    std::vector<types::AudioDeviceInfo>& availableDevices;
-    std::vector<std::string>& samples;
-    uint32_t& velocity;
-    bool& running;
-    int& selectedDeviceIndex;
-    std::string& statusMessage;
-    std::string& lastTriggeredSound;
+using namespace ftxui;
+
+// ---------------------------------------------------------------------------
+// Strong types
+// ---------------------------------------------------------------------------
+
+struct MidiVelocity {
+    explicit MidiVelocity(int v) noexcept : value(std::clamp(v, 0, 127)) {}
+    int value;
 };
 
-// Command handler type
-using CommandHandler = std::function<void(CommandContext&, const std::string&)>;
+using DeviceIndex = std::size_t;
+using SampleIndex = std::size_t;
 
-// UI Manager for rendering the interface
-class UIManager {
+// ---------------------------------------------------------------------------
+// RAII mouse reporting guard
+//
+// Emits the three escape sequences that enable SGR extended mouse reporting
+// on construction, and cleanly disables them on destruction — even if the
+// stack unwinds via an exception.  The guard is move-only so it can be stored
+// in a std::optional and released early if needed.
+//
+// Terminal support:
+//   ?1000h  – button-event tracking (press + release)
+//   ?1002h  – button-event + drag tracking
+//   ?1006h  – SGR extended coordinate mode (required by FTXUI for wide terminals)
+//
+// Note: Terminal.app on macOS does not implement ?1006h and will not produce
+// mouse events regardless.  Use iTerm2, Kitty, or WezTerm for full support.
+// ---------------------------------------------------------------------------
+
+class MouseReportingGuard {
 public:
-    static void clearScreen() { std::cout << "\033[2J\033[H" << std::flush; }
-
-    static void renderUI(const CommandContext& ctx) {
-        clearScreen();
-
-        // Header
-        std::cout << "╔════════════════════════════════════════════════════════════════╗\n";
-        std::cout << "║              🎵 Raspberry Pi Sound System 🎵                   ║\n";
-        std::cout << "╚════════════════════════════════════════════════════════════════╝\n\n";
-
-        // Selected Device Info
-        std::cout << "┌─ Audio Device ─────────────────────────────────────────────────┐\n";
-        if (ctx.selectedDeviceIndex >= 0 && ctx.selectedDeviceIndex < static_cast<int>(ctx.availableDevices.size())) {
-            const auto& device = ctx.availableDevices[ctx.selectedDeviceIndex];
-            std::cout << "│ ✓ " << device.description << "│\n";
-            std::cout << "│   Card: " << std::setw(3) << device.cardId << " Device: " << std::setw(3) << device.deviceId
-                      << std::setw(40) << "" << "│\n";
-        } else {
-            std::cout << "│ ✗ No device selected" << std::setw(42) << "" << "│\n";
-        }
-        std::cout << "└────────────────────────────────────────────────────────────────┘\n\n";
-
-        // Velocity Info
-        std::cout << "┌─ Settings ─────────────────────────────────────────────────────┐\n";
-        std::cout << "│ Velocity: " << std::setw(52) << ctx.velocity << "│\n";
-        std::cout << "└────────────────────────────────────────────────────────────────┘\n\n";
-
-        // Available Samples
-        std::cout << "┌─ Available Samples ────────────────────────────────────────────┐\n";
-        int maxSamplesToShow = 8;
-        for (int i = 0; i < std::min(maxSamplesToShow, static_cast<int>(ctx.samples.size())); ++i) {
-            std::string marker = (ctx.samples[i] == ctx.lastTriggeredSound) ? "♪" : " ";
-            std::cout << "│ " << marker << " [" << i << "] " << std::left << std::setw(54) << ctx.samples[i] << "│\n";
-        }
-        if (ctx.samples.size() > maxSamplesToShow) {
-            std::cout << "│   ... and " << (ctx.samples.size() - maxSamplesToShow) << " more (use 'l' to list all)"
-                      << std::setw(24) << "" << "│\n";
-        }
-        std::cout << "└────────────────────────────────────────────────────────────────┘\n\n";
-
-        // Status Message
-        std::cout << "┌─ Status ───────────────────────────────────────────────────────┐\n";
-        std::cout << "│ " << std::left << std::setw(61) << ctx.statusMessage << "│\n";
-        std::cout << "└────────────────────────────────────────────────────────────────┘\n\n";
-
-        // Commands
-        std::cout << "┌─ Commands ─────────────────────────────────────────────────────┐\n";
-        std::cout << "│ [0-9] Trigger sample  │ [l] List all    │ [d] Change device  │\n";
-        std::cout << "│ [v] Set velocity      │ [h] Help        │ [q] Quit           │\n";
-        std::cout << "└────────────────────────────────────────────────────────────────┘\n";
-
-        std::cout << "\n> ";
-        std::cout.flush();
+    MouseReportingGuard() {
+        std::cout << "\033[?1000h"  // button events
+                  << "\033[?1002h"  // button + drag
+                  << "\033[?1006h"  // SGR extended mode
+                  << std::flush;
     }
+
+    ~MouseReportingGuard() { disable(); }
+
+    // Move-only — copying would double-disable on destruction.
+    MouseReportingGuard(const MouseReportingGuard&) = delete;
+    MouseReportingGuard& operator=(const MouseReportingGuard&) = delete;
+
+    MouseReportingGuard(MouseReportingGuard&& other) noexcept : m_active(std::exchange(other.m_active, false)) {}
+
+    MouseReportingGuard& operator=(MouseReportingGuard&& other) noexcept {
+        if (this != &other) {
+            disable();
+            m_active = std::exchange(other.m_active, false);
+        }
+        return *this;
+    }
+
+    // Allow explicit early release (e.g. before spawning a child process).
+    void release() noexcept { disable(); }
+
+private:
+    void disable() noexcept {
+        if (!m_active)
+            return;
+        std::cout << "\033[?1006l"  // disable SGR extended mode
+                  << "\033[?1002l"  // disable drag tracking
+                  << "\033[?1000l"  // disable button events
+                  << std::flush;
+        m_active = false;
+    }
+
+    bool m_active = true;
 };
 
-// Command registry
-class CommandRegistry {
+// ---------------------------------------------------------------------------
+// SoundUIBackend concept
+//
+// Decouples the UI from SoundManager entirely.  Any type satisfying this
+// concept can back the UI — no std::function overhead, no nullable callbacks,
+// violations caught at compile time.
+// ---------------------------------------------------------------------------
+
+template <typename T>
+concept SoundUIBackend = requires(T & t, DeviceIndex di, SampleIndex si, MidiVelocity v) {
+    {t.selectDevice(di)}->std::same_as<bool>;
+    {t.triggerSound(si, v)}->std::same_as<bool>;
+};
+
+// ---------------------------------------------------------------------------
+// RpiSoundUI
+// ---------------------------------------------------------------------------
+
+template <SoundUIBackend Backend>
+class RpiSoundUI {
 public:
-    struct Command {
-        std::vector<std::string> aliases;
-        std::string description;
-        CommandHandler handler;
-    };
+    RpiSoundUI(Backend& backend, std::span<const std::string> devices, std::span<const std::string> samples)
+        : m_backend(backend),
+          m_deviceEntries(devices.begin(), devices.end()),
+          m_sampleEntries(samples.begin(), samples.end()),
+          m_selectedDeviceIndex(0),
+          m_selectedSampleIndex(0),
+          m_velocity(100),
+          m_activeDeviceIndex(std::nullopt),
+          m_statusMessage("Ready — select a device to start"),
+          m_lastTriggeredSound() {}
 
-    void registerCommand(const std::vector<std::string>& aliases,
-                         const std::string& description,
-                         CommandHandler handler) {
-        Command cmd{aliases, description, handler};
-        for (const auto& alias : aliases) {
-            m_commands[alias] = cmd;
-        }
+    Component CreateUI(ScreenInteractive& screen) {
+        return Renderer(Container::Vertical({
+                            MakeDevicePanel(),
+                            MakeSamplePanel(),
+                            MakeMidiPanel(),
+                            MakeControlsPanel(screen),
+                        }),
+                        [this](Component& root) {
+                            // Expose the horizontal split through the renderer
+                            auto devicePanel = MakeDevicePanel();
+                            auto samplePanel = MakeSamplePanel();
+                            auto midiPanel = MakeMidiPanel();
+                            auto controlPanel = MakeControlsPanel_Renderer();
+
+                            return vbox({
+                                MakeHeader(),
+                                hbox({
+                                    devicePanel->Render(),
+                                    samplePanel->Render(),
+                                    midiPanel->Render(),
+                                    controlPanel->Render(),
+                                }) | flex,
+                                MakeStatusBar(),
+                            });
+                        });
     }
 
-    bool execute(const std::string& input, CommandContext& context) const {
-        auto it = m_commands.find(input);
-        if (it != m_commands.end()) {
-            it->second.handler(context, input);
-            return true;
-        }
-        return false;
-    }
+    // Public entry point that wires components and runs the layout correctly.
+    Component Build(ScreenInteractive& screen) {
+        auto devicePanel = MakeDevicePanel();
+        auto samplePanel = MakeSamplePanel();
+        auto midiPanel = MakeMidiPanel();
+        auto controlPanel = MakeControlsPanel(screen);
 
-    void printHelp(const CommandContext& ctx) const {
-        UIManager::clearScreen();
-        std::cout << "╔════════════════════════════════════════════════════════════════╗\n";
-        std::cout << "║                          Help Menu                             ║\n";
-        std::cout << "╚════════════════════════════════════════════════════════════════╝\n\n";
+        auto mainContainer = Container::Horizontal({
+            devicePanel,
+            samplePanel,
+            midiPanel,
+            controlPanel,
+        });
 
-        std::unordered_map<std::string, const Command*> uniqueCommands;
-        for (const auto& [alias, cmd] : m_commands) {
-            if (uniqueCommands.find(cmd.aliases[0]) == uniqueCommands.end()) {
-                uniqueCommands[cmd.aliases[0]] = &cmd;
+        auto root = Renderer(mainContainer, [this, mainContainer] {
+            return vbox({
+                MakeHeader(),
+                mainContainer->Render() | flex,
+                MakeStatusBar(),
+            });
+        });
+
+        root |= CatchEvent([&screen](Event event) {
+            if (event == Event::Character('q') || event == Event::Character('Q')) {
+                screen.ExitLoopClosure()();
+                return true;
             }
-        }
+            return false;
+        });
 
-        for (const auto& [_, cmd] : uniqueCommands) {
-            std::cout << "  ";
-            for (size_t i = 0; i < cmd->aliases.size(); ++i) {
-                std::cout << cmd->aliases[i];
-                if (i < cmd->aliases.size() - 1)
-                    std::cout << ", ";
-            }
-            std::cout << " - " << cmd->description << "\n";
-        }
-
-        std::cout << "\n  [0-9...] - Trigger sound sample by number\n";
-        std::cout << "\nPress Enter to continue...";
-        std::cin.ignore();
-        std::cin.get();
+        return root;
     }
 
 private:
-    std::unordered_map<std::string, Command> m_commands;
+    // -- Data ----------------------------------------------------------------
+
+    Backend& m_backend;
+    std::vector<std::string> m_deviceEntries;
+    std::vector<std::string> m_sampleEntries;
+
+    int m_selectedDeviceIndex;
+    int m_selectedSampleIndex;
+    int m_velocity;
+
+    std::optional<DeviceIndex> m_activeDeviceIndex;  // nullopt = no device selected
+    std::string m_statusMessage;
+    std::string m_lastTriggeredSound;
+
+    // -- Helpers -------------------------------------------------------------
+
+    bool isDeviceSelected() const noexcept { return m_activeDeviceIndex.has_value(); }
+
+    void onSelectDevice() {
+        const auto idx = static_cast<DeviceIndex>(m_selectedDeviceIndex);
+        if (m_backend.selectDevice(idx)) {
+            m_activeDeviceIndex = idx;
+            m_statusMessage = std::format("✓ Device selected: {}", m_deviceEntries[idx]);
+        } else {
+            m_activeDeviceIndex = std::nullopt;
+            m_statusMessage = std::format("❌ Failed to select device: {}", m_deviceEntries[idx]);
+        }
+    }
+
+    void onTriggerSound() {
+        if (!isDeviceSelected()) {
+            m_statusMessage = "❌ Please select a device first";
+            return;
+        }
+        const auto idx = static_cast<SampleIndex>(m_selectedSampleIndex);
+        const auto vel = MidiVelocity(m_velocity);
+        if (m_backend.triggerSound(idx, vel)) {
+            m_lastTriggeredSound = m_sampleEntries[idx];
+            m_statusMessage = std::format("♪ Played sample: {}", m_lastTriggeredSound);
+        } else {
+            m_statusMessage = std::format("❌ Failed to play sample: {}", m_sampleEntries[idx]);
+        }
+    }
+
+    // -- Panel factories -----------------------------------------------------
+
+    Component MakeDevicePanel() {
+        auto menu = Menu(&m_deviceEntries, &m_selectedDeviceIndex);
+        auto selectBtn = Button("Select Device", [this] { onSelectDevice(); });
+
+        return Container::Vertical({
+                   Renderer([] { return text("Audio Devices") | ftxui::bold | center; }),
+                   Renderer([] { return separator(); }),
+                   menu | flex,
+                   Renderer([] { return separator(); }),
+                   selectBtn,
+               }) |
+               border | size(WIDTH, EQUAL, 40);
+    }
+
+    Component MakeSamplePanel() {
+        auto menu = Menu(&m_sampleEntries, &m_selectedSampleIndex);
+        auto triggerBtn = Button("Trigger Sound", [this] { onTriggerSound(); });
+
+        return Container::Vertical({
+                   Renderer([] { return text("Available Samples") | ftxui::bold | center; }),
+                   Renderer([] { return separator(); }),
+                   Renderer(menu, [menu] { return menu->Render() | vscroll_indicator | frame; }) | flex,
+                   Renderer([] { return separator(); }),
+                   triggerBtn,
+               }) |
+               border | flex;
+    }
+
+    Component MakeMidiPanel() {
+        return Container::Vertical({
+                   Renderer([] { return text("MIDI Mappings") | ftxui::bold | center; }),
+                   Renderer([] { return separator(); }),
+                   Renderer([] { return text("MIDI mapping UI coming soon...") | color(Color::GrayDark); }) | flex,
+               }) |
+               border | flex;
+    }
+
+    Component MakeControlsPanel(ScreenInteractive& screen) {
+        // +/- buttons replace the sticky Slider — they release mouse focus correctly.
+        auto decFast = Button("-10", [this] { m_velocity = std::max(0, m_velocity - 10); });
+        auto dec = Button(" -  ", [this] { m_velocity = std::max(0, m_velocity - 1); });
+        auto inc = Button(" +  ", [this] { m_velocity = std::min(127, m_velocity + 1); });
+        auto incFast = Button("+10", [this] { m_velocity = std::min(127, m_velocity + 10); });
+        auto quitBtn = Button("Quit", [&screen] { screen.ExitLoopClosure()(); });
+
+        return Container::Vertical({
+                   Renderer([] { return text("Controls") | ftxui::bold | center; }),
+                   Renderer([] { return separator(); }),
+
+                   // Velocity row
+                   Container::Horizontal({decFast, dec, inc, incFast}),
+                   Renderer([this] {
+                       return hbox({
+                           text("Velocity: "),
+                           text(std::format("{:3}", m_velocity)) | ftxui::bold | color(Color::Yellow),
+                       });
+                   }),
+
+                   Renderer([] { return separator(); }),
+                   Renderer([this] { return text("Device:") | ftxui::bold; }),
+                   Renderer([this] {
+                       const bool connected = isDeviceSelected();
+                       return text(connected ? "✓ Connected" : "✗ Not connected") |
+                              color(connected ? Color::Green : Color::Red);
+                   }),
+
+                   Renderer([] { return separator(); }),
+                   Renderer([this] { return text("Last played:") | ftxui::bold; }),
+                   Renderer([this] {
+                       const auto& label = m_lastTriggeredSound.empty() ? "-" : m_lastTriggeredSound;
+                       return text(label) | color(Color::Magenta);
+                   }),
+
+                   Renderer([] { return vbox({}) | flex; }),
+                   Renderer([] { return separator(); }),
+                   quitBtn,
+               }) |
+               border | size(WIDTH, EQUAL, 30);
+    }
+
+    // Stateless renderer variant used inside the Renderer lambda of Build().
+    Component MakeControlsPanel_Renderer() {
+        // Thin wrapper — returns a non-interactive renderer for layout only.
+        // Interactive variant is wired in Build().
+        return Renderer([this] {
+            return vbox({
+                text("Controls") | ftxui::bold | center,
+                separator(),
+                hbox({
+                    text("Velocity: "),
+                    text(std::format("{:3}", m_velocity)) | ftxui::bold | color(Color::Yellow),
+                }),
+                separator(),
+                text("Device:") | ftxui::bold,
+                text(isDeviceSelected() ? "✓ Connected" : "✗ Not connected") |
+                    color(isDeviceSelected() ? Color::Green : Color::Red),
+            });
+        });
+    }
+
+    // -- Shared render helpers -----------------------------------------------
+
+    Element MakeHeader() const {
+        return hbox({text("🎵 Raspberry Pi Sound System 🎵") | ftxui::bold | center}) | border | color(Color::Cyan);
+    }
+
+    Element MakeStatusBar() const {
+        const bool isError = m_statusMessage.contains("❌");
+        const bool isSuccess = m_statusMessage.contains("✓");
+        const bool isPlaying = m_statusMessage.contains("♪");
+
+        const Color msgColor = isError     ? Color::Red
+                               : isSuccess ? Color::Green
+                               : isPlaying ? Color::Yellow
+                                           : Color::White;
+
+        return hbox({text(" Status: "), text(m_statusMessage) | ftxui::bold | color(msgColor)}) | border |
+               color(Color::Cyan);
+    }
 };
 
-void showDeviceSelectionMenu(const CommandContext& ctx) {
-    UIManager::clearScreen();
-    std::cout << "╔════════════════════════════════════════════════════════════════╗\n";
-    std::cout << "║                     Select Audio Device                        ║\n";
-    std::cout << "╚════════════════════════════════════════════════════════════════╝\n\n";
+class SoundManagerBackend {
+public:
+    SoundManagerBackend(SoundManager& mgr,
+                        std::span<const types::AudioDeviceInfo> devices,
+                        std::span<const std::string> samples)
+        : m_manager(mgr), m_devices(devices.begin(), devices.end()), m_samples(samples.begin(), samples.end()) {}
 
-    for (size_t i = 0; i < ctx.availableDevices.size(); ++i) {
-        std::string marker = (i == static_cast<size_t>(ctx.selectedDeviceIndex)) ? "✓" : " ";
-        std::cout << " " << marker << " [" << i << "] " << ctx.availableDevices[i].description
-                  << " (Card: " << ctx.availableDevices[i].cardId << ", Device: " << ctx.availableDevices[i].deviceId
-                  << ")\n";
+    bool selectDevice(DeviceIndex idx) {
+        if (idx >= m_devices.size())
+            return false;
+        return m_manager.selectAudioDevice(m_devices[idx]);
     }
 
-    std::cout << "\nEnter device number: ";
-}
-
-void showSampleList(const CommandContext& ctx) {
-    UIManager::clearScreen();
-    std::cout << "╔════════════════════════════════════════════════════════════════╗\n";
-    std::cout << "║                     Available Samples                          ║\n";
-    std::cout << "╚════════════════════════════════════════════════════════════════╝\n\n";
-
-    for (size_t i = 0; i < ctx.samples.size(); ++i) {
-        std::string marker = (ctx.samples[i] == ctx.lastTriggeredSound) ? "♪" : " ";
-        std::cout << " " << marker << " [" << i << "] " << ctx.samples[i] << "\n";
+    bool triggerSound(SampleIndex idx, MidiVelocity velocity) {
+        if (idx >= m_samples.size())
+            return false;
+        return m_manager.triggerSound(m_samples[idx], static_cast<uint32_t>(velocity.value));
     }
 
-    std::cout << "\nPress Enter to continue...";
-    std::cin.ignore();
-    std::cin.get();
-}
+private:
+    SoundManager& m_manager;
+    std::vector<types::AudioDeviceInfo> m_devices;
+    std::vector<std::string> m_samples;
+};
 
-CommandRegistry setupCommands() {
-    CommandRegistry registry;
+static_assert(SoundUIBackend<SoundManagerBackend>);
 
-    // Quit command
-    registry.registerCommand({"q", "quit", "exit"}, "Quit the program", [](CommandContext& ctx, const std::string&) {
-        ctx.running = false;
-    });
+struct AudioBackends {
+#if defined(USE_COREAUDIO)
+    CoreAudioDriver driver;
+    CoreAudioDeviceEnumerator enumerator;
+#else
+    AlsaDriver driver;
+    AlsaDeviceEnumerator enumerator;
+#endif
+};
 
-    // List samples command
-    registry.registerCommand({"l", "list"}, "List all available samples", [](CommandContext& ctx, const std::string&) {
-        showSampleList(ctx);
-    });
+int main() {
+    const MouseReportingGuard mouseGuard;
 
-    // List devices command
-    registry.registerCommand(
-        {"d", "devices"}, "List and select audio device", [](CommandContext& ctx, const std::string&) {
-            showDeviceSelectionMenu(ctx);
-
-            int selection;
-
-            if (!(std::cin >> selection) ||
-                (selection < 0 || selection >= static_cast<int>(ctx.availableDevices.size()))) {
-                std::cin.clear();
-                ctx.statusMessage = "❌ Invalid device selection";
-                return;
-            }
-
-            if (ctx.soundManager.selectAudioDevice(ctx.availableDevices[selection])) {
-                ctx.selectedDeviceIndex = selection;
-                ctx.statusMessage = "✓ Device selected: " + ctx.availableDevices[selection].description;
-            } else {
-                ctx.statusMessage = "❌ Failed to select device";
-            }
-        });
-
-    // Help command
-    registry.registerCommand({"h", "help", "?"},
-                             "Show this help message",
-                             [&registry](CommandContext& ctx, const std::string&) { registry.printHelp(ctx); });
-
-    // Set velocity command
-    registry.registerCommand({"v", "velocity"}, "Set velocity (0-127)", [](CommandContext& ctx, const std::string&) {
-        UIManager::clearScreen();
-        std::cout << "Current velocity: " << ctx.velocity << "\n";
-        std::cout << "Enter new velocity (0-127): ";
-
-        int newVelocity;
-        std::cin >> newVelocity;
-
-        if (newVelocity >= 0 && newVelocity <= 127) {
-            ctx.velocity = newVelocity;
-            ctx.statusMessage = "✓ Velocity set to: " + std::to_string(ctx.velocity);
-        } else {
-            ctx.statusMessage = "❌ Invalid velocity (must be 0-127)";
-        }
-    });
-
-    return registry;
-}
-
-int main(int argc, char* argv[]) {
-    argparse::ArgumentParser program("RpiSound", "1.0");
-
-    program.add_argument("--instrument", "-i")
-        .help("Instrument folder to load samples from")
-        .default_value(std::string("demo"));
-
-    program.add_argument("--velocity", "-v")
-        .help("Default velocity for triggering sounds (0-127)")
-        .default_value(100U)
-        .scan<'u', uint32_t>();
-
-    program.add_argument("--log-level", "-l")
-        .help("Set log level (trace, debug, info, warn, error)")
-        .default_value(std::string("info"));
-
-    try {
-        program.parse_args(argc, argv);
-    } catch (const std::exception& err) {
-        spdlog::error("Error parsing command line arguments. Error: {}", err.what());
-        return 1;
-    }
-
-    // Set log level
-    std::string logLevel = program.get<std::string>("--log-level");
-    if (logLevel == "trace") {
-        spdlog::set_level(spdlog::level::trace);
-    } else if (logLevel == "debug") {
-        spdlog::set_level(spdlog::level::debug);
-    } else if (logLevel == "info") {
-        spdlog::set_level(spdlog::level::info);
-    } else if (logLevel == "warn") {
-        spdlog::set_level(spdlog::level::warn);
-    } else if (logLevel == "error") {
-        spdlog::set_level(spdlog::level::err);
-    }
-
-    // Initialize the ALSA driver
-    AlsaDriver alsaDriver;
-    AlsaDeviceEnumerator alsaEnumerator;
+    AudioBackends backends;
     AudioDeviceFactory deviceFactory;
 
-    auto audioDeviceManager = AudioDeviceManager(deviceFactory, alsaEnumerator, alsaDriver);
+    auto audioDeviceManager = AudioDeviceManager(deviceFactory, backends.enumerator, backends.driver);
 
     if (!audioDeviceManager.isInitialized()) {
-        std::cerr << "Failed to initialize Audio Device Manager." << std::endl;
+        std::cerr << "Failed to initialize Audio Device Manager.\n";
         return -1;
     }
 
-    SoundManager soundManager(std::make_unique<PcmLoader>(), audioDeviceManager);
+    SoundManager soundManager(std::make_unique<PcmLoader>(), audioDeviceManager, createAudioEngine(512));
 
     if (!soundManager.initialize()) {
-        std::cerr << "Failed to initialize Sound Manager." << std::endl;
+        std::cerr << "Failed to initialize Sound Manager.\n";
         return -1;
     }
 
-    auto availableDevices = soundManager.getAvailableAudioDevices();
+    const auto availableDevices = soundManager.getAvailableAudioDevices(types::AudioDeviceInfo::DeviceType::kPlayback);
+
+    const auto availableDeviceDescriptions =
+        soundManager.getAvailableAudioDeviceDescriptions(types::AudioDeviceInfo::DeviceType::kPlayback);
+
     if (availableDevices.empty()) {
-        std::cerr << "No audio devices available." << std::endl;
+        std::cerr << "No audio devices available.\n";
         return -1;
     }
 
-    if (!soundManager.load(program.get<std::string>("--instrument"))) {
-        std::cerr << "Failed to load instrument samples." << std::endl;
+    if (!soundManager.load("demo")) {
+        std::cerr << "Failed to load instrument samples.\n";
         return -1;
     }
 
-    auto samples = soundManager.getAvailableSamples();
-    uint32_t velocity = program.get<uint32_t>("--velocity");
-    bool running = true;
-    int selectedDeviceIndex = -1;
-    std::string statusMessage = "Ready";
-    std::string lastTriggeredSound = "";
+    const auto samples = soundManager.getAvailableSamples();
 
-    CommandRegistry commandRegistry = setupCommands();
-    CommandContext context{soundManager,
-                           availableDevices,
-                           samples,
-                           velocity,
-                           running,
-                           selectedDeviceIndex,
-                           statusMessage,
-                           lastTriggeredSound};
+    SoundManagerBackend backend(soundManager, availableDevices, samples);
 
-    std::string input = "d";  // Start with device selection
-    while (running) {
-        UIManager::renderUI(context);
+    auto screen = ScreenInteractive::Fullscreen();
+    auto app = RpiSoundUI(backend, availableDeviceDescriptions, samples);
+    auto ui = app.Build(screen);
 
-        // Try to execute as a command first
-        if (commandRegistry.execute(input, context)) {
-            input = "";
-            continue;
-        }
-
-        // Clear input buffer
-        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-
-        std::cin >> input;
-
-        // Otherwise, try to parse as sample number
-        try {
-            int sampleIndex = std::stoi(input);
-
-            if (sampleIndex < 0 || sampleIndex >= static_cast<int>(samples.size())) {
-                context.statusMessage = "❌ Invalid sample number";
-                continue;
-            }
-
-            const auto& sampleName = samples[sampleIndex];
-
-            if (soundManager.triggerSound(sampleName, velocity)) {
-                context.lastTriggeredSound = sampleName;
-                context.statusMessage = "♪ Playing: " + sampleName + " (velocity: " + std::to_string(velocity) + ")";
-            } else {
-                context.statusMessage = "❌ Failed to trigger: " + sampleName;
-            }
-
-        } catch (const std::exception& e) {
-            context.statusMessage = "❌ Invalid input - use number or command";
-        }
-    }
-
-    UIManager::clearScreen();
-    std::cout << "Rpi Sound terminated.\n";
+    screen.Loop(ui);
     return 0;
 }

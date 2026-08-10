@@ -2,7 +2,15 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug rpi_sound",
+      "name": "Debug rpi_sound (lldb)",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/RpiSound",
+      "cwd": "${workspaceFolder}",
+      "args": []
+    },
+    {
+     "name": "Debug rpi_sound (gdb)",
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/build/RpiSound",

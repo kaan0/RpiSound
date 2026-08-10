@@ -3,20 +3,17 @@
 #include <memory>
 
 #include "interfaces/iaudio_device.hpp"
-#include "interfaces/iaudio_driver.hpp"
 #include "interfaces/iaudio_device_manager.hpp"
+#include "interfaces/iaudio_driver.hpp"
 
 using namespace std::literals;
 
 class AudioDeviceManager : public IAudioDeviceManager {
 public:
-    static constexpr std::string_view kCardsPath = "/proc/asound/cards"sv;      // Path to the ALSA cards file
-    static constexpr std::string_view kDevicesPath = "/proc/asound/devices"sv;  // Path to the ALSA devices file
-
     // Constructor
     AudioDeviceManager(IAudioDeviceFactory& deviceFactory,
-                    IDeviceEnumerator& deviceEnumerator,
-                    IAudioDriver& audioDriver);
+                       IDeviceEnumerator& deviceEnumerator,
+                       IAudioDriver& audioDriver);
 
     // Destructor
     ~AudioDeviceManager() override = default;
@@ -29,7 +26,8 @@ public:
     bool isInitialized() const override;
 
     // Get a list of available audio devices
-    Result<std::vector<types::AudioDeviceInfo>> getAvailableDevices() const override;
+    Result<std::vector<types::AudioDeviceInfo>> getAvailableDevices(
+        types::AudioDeviceInfo::DeviceType type) const override;
 
     // Get the current audio device
     Result<std::shared_ptr<IAudioDevice>> getDevice() const override;
@@ -44,7 +42,6 @@ public:
     bool isDeviceOpen() const override;
 
 private:
-
     // Pointer to the currently opened audio device
     std::shared_ptr<IAudioDevice> m_currentDevice;
 

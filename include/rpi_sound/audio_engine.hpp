@@ -1,11 +1,9 @@
 #pragma once
 
+#include <array>
 #include <atomic>
-#include <condition_variable>
-#include <functional>
 #include <memory>
 #include <mutex>
-#include <span>
 #include <thread>
 #include <vector>
 
@@ -16,64 +14,49 @@
 
 class AudioEngine : public IAudioEngine {
 public:
-    // Constructor
-    explicit AudioEngine(size_t bufferSize = 8192, size_t chunkSize = 1024);
+    static constexpr size_t kMaxVoices = 8;
 
-    // Destructor
+    explicit AudioEngine(size_t chunkSize = 512);
     ~AudioEngine() override;
 
-    // Delete copy constructor and assignment operator
     AudioEngine(const AudioEngine&) = delete;
     AudioEngine& operator=(const AudioEngine&) = delete;
+    AudioEngine(AudioEngine&&) = delete;
+    AudioEngine& operator=(AudioEngine&&) = delete;
 
-    // Move constructor and assignment operator
-    AudioEngine(AudioEngine&&) = default;
-    AudioEngine& operator=(AudioEngine&&) = default;
-
-    // Start the audio engine
     Result<void> start(std::shared_ptr<IAudioDevice> audioDevice) override;
-
-    // Stop the audio engine
     Result<void> stop() override;
 
-    // Write samples to the circular buffer (non-blocking)
-    Result<void> writeSample(const types::audio_span_t& audioData) override;
+    // Non-blocking. Restarts if the same sample is already playing.
+    // Steals the voice with the least audio remaining when all 8 slots are busy.
+    // gain: 0.0 = silent, 1.0 = full volume.
+    Result<void> writeSample(std::shared_ptr<const types::SoundSample> sample, float gain) override;
 
-    // Check if the engine is running
     bool isRunning() const override;
 
 private:
-    std::shared_ptr<IAudioDevice> m_audioDevice;
-    // Circular buffer implementation
-    class CircularBuffer {
-    public:
-        explicit CircularBuffer(size_t size);
-
-        // Write data to buffer (returns number of samples actually written)
-        size_t write(std::span<const types::audio_t> data);
-
-        // Read data from buffer (returns number of samples actually read)
-        size_t read(std::span<types::audio_t> data);
-
-        // Get available space for writing
-        size_t getAvailableSpace() const;
-
-        // Get available data for reading
-        size_t getAvailableData() const;
-
-        // Get total buffer size
-        size_t getSize() const;
-
-        // Check if buffer is empty
-        bool isEmpty() const;
-
-        // Clear the buffer
-        void clear();
+    struct Voice {
+        std::shared_ptr<const types::SoundSample> sample;
+        size_t position = 0;
+        float gain = 1.0f;
+        bool active = false;
+        // effects chain slot — populated when effect engine is added
+        // std::vector<std::unique_ptr<IEffect>> effects;
     };
 
-    // Audio processing thread function
+    std::shared_ptr<IAudioDevice> m_audioDevice;
+
+    std::array<Voice, kMaxVoices> m_voices{};
+    std::mutex m_voicesMutex;
+
+    std::atomic<bool> m_running{false};
+    std::unique_ptr<std::thread> m_mixThread;
+
+    size_t m_chunkSize;
+    std::vector<float> m_floatMix;        // float accumulator (always float, both backends)
+    std::vector<types::audio_t> m_output; // converted output sent to device
+
     void audioThreadFunction();
 };
 
-// Factory function for creating audio engines
-std::unique_ptr<AudioEngine> createAudioEngine(size_t bufferSize = 8192, size_t chunkSize = 1024);
+std::unique_ptr<AudioEngine> createAudioEngine(size_t chunkSize = 512);

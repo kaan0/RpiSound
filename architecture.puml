@@ -1,200 +1,302 @@
 @startuml
-' ====== Interfaces ======
-interface ISoundLoader {
-    +load(filePath: std::string_view): bool
-    +getSample(name: std::string_view): types::SoundSample&
-}
+skinparam packageStyle rectangle
+skinparam linetype ortho
+hide empty members
 
-interface ISoundManager {
-    +initialize(): bool
-    +getAvailableAudioDevices(): std::vector<types::AudioDeviceInfo>
-    +selectAudioDevice(deviceInfo: types::AudioDeviceInfo&): bool
-    +load(instrumentType: std::string_view): bool
-    +triggerSound(sampleName: std::string_view, velocity: uint32_t): bool
-}
-
-interface IAudioDevice {
-    +open(deviceInfo: types::AudioDeviceInfo&): bool
-    +close()
-    +isOpen(): bool
-    +write(audioData: types::audio_span_t&): bool
-    +read(audioBuffer: types::audio_span_mut_t&, framesToRead: size_t): bool
-    +getBufferSize(): size_t
-    +getAvailableFrames(): size_t
-    +getLastError(): std::string
-}
-
-interface IAudioDeviceManager {
-    +initialize(alsaDriver: std::unique_ptr<AlsaDriver>): bool
-    +isInitialized(): bool
-    +getAvailableDevices(): std::vector<types::AudioDeviceInfo>&
-    +closeDevice()
-    +isDeviceOpen(): bool
-    +getCurrentDevice(): std::shared_ptr<IAudioDevice>
-}
-
-interface IAudioDriver {
-    +open(deviceInfo: types::AudioDeviceInfo&): bool
-}
-
-interface AlsaDriver {
-    +pcmOpen(card: uint32_t, device: uint32_t, flags: uint32_t, config: PcmConfig*): PcmHandle*
-    +pcmClose(pcm: PcmHandle*): int
-    +pcmWrite(pcm: PcmHandle*, data: void*, count: size_t): int
-}
-
-!ifdef FUTURE
-
-interface IMidiInputHandler {
-    +onMidiEvent(event: MidiEvent)
-}
-
-interface IEffect {
-    +process(samples: types::audio_span_mut_t, channels: size_t)
-}
-
-!endif
-
-' ====== Types Namespace ======
+' ====================================================================
+' TYPES
+' ====================================================================
 namespace types {
-    ' Type aliases
-    class "audio_t" as audio_t << (T,lightblue) typedef >> {
-        using audio_t = int16_t
-        using audio_span_t = std::span<const audio_t>
-        using audio_span_mut_t = std::span<audio_t>
+    class audio_t << (T,lightblue) typedef >> {
+        float   (Core Audio — F32LE)
+        int16_t (ALSA      — S16LE)
     }
-    
+
     class SoundSample {
         +audioData: vector<audio_t>
         +metadata: Metadata
+        --
         +getAudioSpan(): audio_span_t
         +getAudioSpanMut(): audio_span_mut_t
     }
 
     class Metadata {
-        +name: std::string
+        +name: string
         +sampleRate: uint32_t
         +frames: size_t
         +channels: uint16_t
     }
 
-    class MidiEvent {
-        +type: int
-        +note: int
-        +velocity: int
+    class AudioDeviceInfo {
+        +cardId: int32_t
+        +deviceId: int32_t
+        +type: DeviceType
+        +format: DeviceFormat
+        +driver: string
+        +description: string
     }
 
     class DeviceFormat {
-        +SampleFormat: enum
         +periodSize: uint32_t
         +periodCount: uint32_t
-        +startTreshold: uint32_t
-        +stopTreshold: uint32_t
-        +silenceTreshold: uint32_t
-        +silenceSize: uint32_t
         +channelCount: uint32_t
         +sampleRate: uint32_t
         +sampleFormat: SampleFormat
     }
 
-    class AudioDeviceInfo {
-        +format: DeviceFormat
-        +DeviceType: enum
-        +cardId: int32_t
-        +deviceId: int32_t
-        +type: DeviceType
-        +driver: std::string
-        +description: std::string
+    class "Result<T>" << (T,lightblue) typedef >> {
+        std::expected<T, std::string>
     }
 
-    SoundSample --> audio_t
-    SoundSample --> Metadata
-    AudioDeviceInfo --> DeviceFormat
+    SoundSample *-- Metadata
+    AudioDeviceInfo *-- DeviceFormat
 }
 
-' ====== Concrete Classes ======
-class PCMLoader implements ISoundLoader {
-    -mmapFile(filePath: std::string): bool
-    -samples: std::unordered_map<std::string, types::SoundSample>
-    +load(filePath: std::string): bool
-    +getSample(name: std::string_view): types::SoundSample&
+' ====================================================================
+' INTERFACES
+' ====================================================================
+interface ISoundManager {
+    +initialize(): bool
+    +getAvailableAudioDevices(type): vector<AudioDeviceInfo>
+    +getAvailableAudioDeviceDescriptions(type): vector<string>
+    +selectAudioDevice(deviceInfo): bool
+    +load(instrumentType): bool
+    +getAvailableSamples(): vector<string>
+    +triggerSound(name, velocity: uint32_t): bool
 }
 
+interface ISoundLoader {
+    +load(instrumentFolder): bool
+    +getSample(name): shared_ptr<const SoundSample>
+    +getSampleNames(): vector<string>
+}
+
+interface IAudioEngine {
+    +writeSample(sample: shared_ptr<const SoundSample>, gain: float): Result<void>
+    +start(device: shared_ptr<IAudioDevice>): Result<void>
+    +stop(): Result<void>
+    +isRunning(): bool
+}
+
+interface IAudioDevice {
+    +open(): Result<void>
+    +close(): Result<void>
+    +isOpen(): Result<bool>
+    +write(audioData): Result<size_t>
+    +read(buffer, frames): Result<size_t>
+    +getBufferSize(): Result<size_t>
+    +getAvailableFrames(): Result<size_t>
+    +getDeviceInfo(): Result<AudioDeviceInfo>
+}
+
+interface IAudioDeviceManager {
+    +isInitialized(): bool
+    +getAvailableDevices(type): Result<vector<AudioDeviceInfo>>
+    +getDevice(): Result<shared_ptr<IAudioDevice>>
+    +openDevice(deviceInfo): Result<void>
+    +closeDevice()
+    +isDeviceOpen(): bool
+}
+
+interface IAudioDriver {
+    +open(deviceInfo): Result<HandlePtr>
+    +close(handle)
+    +isOpen(handle): Result<bool>
+    +write(handle, deviceInfo, audioData): Result<size_t>
+    +read(handle, deviceInfo, buffer, frames): Result<size_t>
+    +wait(handle, timeoutMs): Result<void>
+    +getBufferSize(handle): Result<size_t>
+    +getAvailableFrames(handle): Result<size_t>
+}
+
+interface IDeviceEnumerator {
+    +list(type): Result<vector<AudioDeviceInfo>>
+}
+
+interface IAudioDeviceFactory {
+    +createAudioDevice(deviceInfo, driver): Result<unique_ptr<IAudioDevice>>
+}
+
+interface IAudioHandle {
+}
+
+' ====================================================================
+' CORE CLASSES
+' ====================================================================
 class SoundManager implements ISoundManager {
-    -m_soundLoader: ISoundLoader*
-    -m_audioDeviceManager: IAudioDeviceManager*
-    -effectChain: EffectChain
-    -ringBuffer: RingBuffer
-    +triggerSound(sampleName: std::string, velocity: uint32_t)
-    +load(instrumentType: std::string_view): bool
-    +onMidiEvent(event: types::MidiEvent)
+    -m_soundLoader: unique_ptr<ISoundLoader>
+    -m_audioDeviceManager: IAudioDeviceManager&
+    -m_audioEngine: unique_ptr<IAudioEngine>
 }
+
+class PcmLoader implements ISoundLoader {
+    -m_samples: unordered_map<string, shared_ptr<SoundSample>>
+    --
+    -parseSample(path, sample&): bool
+}
+
+class AudioEngine implements IAudioEngine {
+    -m_voices: array<Voice, 8>
+    -m_voicesMutex: mutex
+    -m_running: atomic<bool>
+    -m_mixThread: unique_ptr<thread>
+    -m_chunkSize: size_t
+    -m_floatMix: vector<float>
+    -m_output: vector<audio_t>
+    --
+    -audioThreadFunction()
+}
+
+note bottom of AudioEngine
+  Planned: per-voice IEffect chain
+  (reverb, balance, etc.) applied
+  during mixing before output.
+end note
+
+class Voice << struct >> {
+    +sample: shared_ptr<const SoundSample>
+    +position: size_t
+    +gain: float
+    +active: bool
+}
+
+note right of Voice
+  8 voices. Retrigger: resets position.
+  Voice steal: least audio remaining.
+  Gain = velocity / 127.0f
+end note
 
 class AudioDevice implements IAudioDevice {
-    -m_alsaDriver: std::shared_ptr<AlsaDriver>
-    -m_pcmHandle: AlsaDriver::PcmHandle*
-    -m_deviceInfo: types::AudioDeviceInfo
-    -m_lastError: std::string
-    +AudioDevice(driver: std::shared_ptr<AlsaDriver>)
-    +open(deviceInfo: types::AudioDeviceInfo&, isCapture: bool): bool
-    +close()
-    +isOpen(): bool
-    +write(audioData: types::audio_span_t): bool
-    +read(audioBuffer: types::audio_span_mut_t, framesToRead: size_t): bool
-    +getBufferSize(): size_t
-    +getAvailableFrames(): size_t
-    +getLastError(): std::string
+    -m_audioDriver: IAudioDriver&
+    -m_driverHandle: HandlePtr
+    -m_deviceInfo: AudioDeviceInfo
 }
 
 class AudioDeviceManager implements IAudioDeviceManager {
-    -m_alsaDriver: std::unique_ptr<AlsaDriver>
-    -m_currentDevice: std::shared_ptr<IAudioDevice>
-    -m_availableDevices: std::vector<types::AudioDeviceInfo>
-    -m_initialized: bool
-    +initialize(alsaDriver: std::unique_ptr<AlsaDriver>): bool
-    +isInitialized(): bool
-    +getAvailableDevices(): std::vector<types::AudioDeviceInfo>&
-    +closeDevice()
-    +isDeviceOpen(): bool
-    +getCurrentDevice(): std::shared_ptr<IAudioDevice>
+    -m_deviceFactory: IAudioDeviceFactory&
+    -m_deviceEnumerator: IDeviceEnumerator&
+    -m_audioDriver: IAudioDriver&
+    -m_currentDevice: shared_ptr<IAudioDevice>
+    -m_playbackDevices: vector<AudioDeviceInfo>
+    -m_captureDevices: vector<AudioDeviceInfo>
 }
 
-!ifdef FUTURE
-
-class EffectChain {
-    -effects: std::vector<IEffect*>
-    +addEffect(effect: IEffect*)
-    +process(samples: types::audio_span_mut_t, channels: size_t)
+class AudioDeviceFactory implements IAudioDeviceFactory {
 }
 
-class BalanceEffect implements IEffect {
-    -balance: float
-    +setBalance(balance: float)
-    +process(samples: types::audio_span_mut_t, channels: size_t)
+' ====================================================================
+' ALSA BACKEND  (USE_COREAUDIO=OFF — Raspberry Pi)
+' Implements: IAudioDriver · IDeviceEnumerator · IAudioHandle
+' No external edges so all classes stay inside the package box.
+' ====================================================================
+package "ALSA Backend" #EEF5FF {
+    class AlsaDriver {
+    }
+    class AlsaDeviceEnumerator {
+    }
+    class AlsaHandle {
+        +p: PcmHandle*
+    }
+    class AlsaFacade << (N,lightgreen) facade >> {
+        pcmOpen / pcmClose
+        pcmWrite / pcmRead
+    }
+
+    AlsaDriver ..> AlsaFacade    : uses
+    AlsaDriver ..> AlsaHandle    : creates
 }
 
-class ReverbEffect implements IEffect {
-    -params: ReverbParams
-    +setParams(params: ReverbParams)
-    +process(samples: types::audio_span_mut_t, channels: size_t)
+' ====================================================================
+' CORE AUDIO BACKEND  (USE_COREAUDIO=ON — macOS)
+' Implements: IAudioDriver · IDeviceEnumerator · IAudioHandle
+' ====================================================================
+package "Core Audio Backend" #FFF5EE {
+    class CoreAudioDriver {
+    }
+    class CoreAudioDeviceEnumerator {
+    }
+    class CoreAudioHandle {
+        +unit: UnitPtr (AudioUnit)
+        +state: shared_ptr<CoreAudioPlayState>
+    }
+    class CoreAudioPlayState {
+        +buffer: array<audio_t, 8193>
+        +scratch: array<audio_t, 2048>
+        +readPos: atomic<size_t>
+        +writePos: atomic<size_t>
+        --
+        +tryWrite(data): size_t
+        +tryRead(out): size_t
+    }
+    note right of CoreAudioPlayState
+      Lock-free ring buffer between
+      the mixing thread (writer) and
+      the AudioUnit render callback
+      (reader). Blocks on full —
+      natural back-pressure to mixer.
+    end note
+    class CoreAudioUtils << (N,lightgreen) facade >> {
+        createOutputUnit
+        getDeviceStreamFormat
+        setRenderCallback
+    }
+
+    CoreAudioDriver ..> CoreAudioHandle    : creates
+    CoreAudioDriver ..> CoreAudioUtils     : uses
+    CoreAudioHandle *-- CoreAudioPlayState
 }
 
-class RingBuffer {
-    -buffer: int16_t[]
-    -size: size_t
-    +write(data: int16_t*, n: size_t): bool
-    +read(data: int16_t*, n: size_t): bool
+' ====================================================================
+' UI  (rpi_sound.cpp — standalone executable)
+' ====================================================================
+package "UI" #F5FFF5 {
+    class "RpiSoundUI<Backend>" as RpiSoundUI {
+        -m_deviceEntries: vector<string>
+        -m_sampleEntries: vector<string>
+        -m_velocity: int [0..127]
+        --
+        +Build(screen): Component
+    }
+    class SoundManagerBackend {
+        +selectDevice(idx: DeviceIndex): bool
+        +triggerSound(idx: SampleIndex, vel: MidiVelocity): bool
+    }
+    class MouseReportingGuard << RAII >> {
+        Enables SGR extended mouse reporting
+        on construction; restores terminal
+        state on destruction.
+    }
+    note right of RpiSoundUI
+      Constrained by SoundUIBackend concept:
+        selectDevice(DeviceIndex)
+        triggerSound(SampleIndex, MidiVelocity)
+      No virtual dispatch — violations
+      caught at compile time.
+    end note
+
+    RpiSoundUI o-- SoundManagerBackend : references
 }
 
-SoundManager --> EffectChain
-SoundManager --> RingBuffer
-EffectChain --> IEffect
+SoundManagerBackend o-- SoundManager : references
 
-!endif
+' ====================================================================
+' RELATIONSHIPS
+' ====================================================================
+SoundManager *-- ISoundLoader        : owns (unique_ptr)
+SoundManager *-- IAudioEngine        : owns (unique_ptr)
+SoundManager o-- IAudioDeviceManager : references
 
-' ====== Relationships ======
-SoundManager ..> ISoundLoader : <<Depends On>>
-SoundManager ..> IAudioDeviceManager : <<Depends On>>
-AudioDeviceManager ..> IAudioDevice : <<Depends On>>
-AudioDevice ..> AlsaDriver : <<Depends On>>
+AudioEngine *-- Voice                : array<Voice, 8>
+Voice o-- "types.SoundSample"        : shared_ptr
+
+AudioEngine o-- IAudioDevice         : shared_ptr
+
+AudioDevice o-- IAudioDriver         : references
+AudioDevice ..> IAudioHandle         : owns via HandlePtr
+
+AudioDeviceManager o-- IDeviceEnumerator   : references
+AudioDeviceManager o-- IAudioDeviceFactory : references
+AudioDeviceManager o-- IAudioDriver        : references
+AudioDeviceManager o-- IAudioDevice        : shared_ptr
+
 @enduml

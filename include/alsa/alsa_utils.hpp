@@ -34,7 +34,7 @@ inline const types::AudioDeviceInfo::DeviceFormat& getDefaultDeviceFormat() {
         .silenceSize = 0,
         .channelCount = 2,                                                  // Stereo
         .sampleRate = 44100,                                                // Common sample rate
-        .sampleFormat = types::AudioDeviceInfo::DeviceFormat::kFormatS32LE  // 16-bit signed little-endian
+        .sampleFormat = types::AudioDeviceInfo::DeviceFormat::kFormatS16LE  // 16-bit signed little-endian (S16LE, matches audio_t = int16_t)
     };
     return defaultFormat;
 }

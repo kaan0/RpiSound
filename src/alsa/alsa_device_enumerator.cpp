@@ -6,18 +6,17 @@
 #include "alsa/alsa_device_enumerator.hpp"
 #include "alsa/alsa_utils.hpp"
 
-Result<std::vector<types::AudioDeviceInfo>> AlsaDeviceEnumerator::list(types::AudioDeviceInfo::DeviceType type,
-    std::string_view cards_file_path, std::string_view devices_file_path) {
+Result<std::vector<types::AudioDeviceInfo>> AlsaDeviceEnumerator::list(types::AudioDeviceInfo::DeviceType type) {
 
     // TODO: Fix unnecessary copy
-    auto devices_file_path_str{std::string(devices_file_path)};
+    auto devices_file_path_str{std::string(AlsaDeviceEnumerator::kDevicesPath)};
     std::ifstream devicesFile{devices_file_path_str};
     if (!devicesFile.good()) {
         return std::unexpected("Failed to open ALSA devices file: " + devices_file_path_str);
     }
 
     // TODO: Fix unnecessary copy
-    auto cards_file_path_str{std::string(cards_file_path)};
+    auto cards_file_path_str{std::string(AlsaDeviceEnumerator::kCardsPath)};
     std::ifstream cardsFile{cards_file_path_str};
     if (!cardsFile.good()) {
         return std::unexpected("Failed to open ALSA cards file: " + cards_file_path_str);
@@ -43,19 +42,18 @@ Result<std::vector<types::AudioDeviceInfo>> AlsaDeviceEnumerator::list(types::Au
         } else if (it->type == type) {
             it->format = result.value();
             spdlog::info("Device found: {} (Card: {}, Device: {})", it->description, it->cardId, it->deviceId);
-            spdlog::info(
-                "Format: {} Hz, {}, Channels: {}, Period Size: {}, Period Count: {}, Type: {}",
-                it->format.sampleRate,
-                (it->format.sampleFormat == types::AudioDeviceInfo::DeviceFormat::kFormatS16LE   ? "S16LE"
-                 : it->format.sampleFormat == types::AudioDeviceInfo::DeviceFormat::kFormatS32LE ? "S32LE"
-                 : it->format.sampleFormat == types::AudioDeviceInfo::DeviceFormat::kFormatFloat ? "FLOAT"
-                                                                                                 : "UNKNOWN"),
-                it->format.channelCount,
-                it->format.periodSize,
-                it->format.periodCount,
-                (it->type == types::AudioDeviceInfo::DeviceType::kPlayback  ? "Playback"
-                 : it->type == types::AudioDeviceInfo::DeviceType::kCapture ? "Capture"
-                                                                            : "Invalid"));
+            spdlog::info("Format: {} Hz, {}, Channels: {}, Period Size: {}, Period Count: {}, Type: {}",
+                         it->format.sampleRate,
+                         (it->format.sampleFormat == types::AudioDeviceInfo::DeviceFormat::kFormatS16LE   ? "S16LE"
+                          : it->format.sampleFormat == types::AudioDeviceInfo::DeviceFormat::kFormatS32LE ? "S32LE"
+                          : it->format.sampleFormat == types::AudioDeviceInfo::DeviceFormat::kFormatFloat ? "FLOAT"
+                                                                                                          : "UNKNOWN"),
+                         it->format.channelCount,
+                         it->format.periodSize,
+                         it->format.periodCount,
+                         (it->type == types::AudioDeviceInfo::DeviceType::kPlayback  ? "Playback"
+                          : it->type == types::AudioDeviceInfo::DeviceType::kCapture ? "Capture"
+                                                                                     : "Invalid"));
         } else {
             it = devices.erase(it);
             continue;
@@ -70,7 +68,6 @@ Result<std::vector<types::AudioDeviceInfo>> AlsaDeviceEnumerator::list(types::Au
     return devices;
 }
 
-
 /* cards:
  0 [Headphones     ]: bcm2835_headpho - bcm2835 Headphones
                       bcm2835 Headphones
@@ -81,7 +78,8 @@ Result<std::vector<types::AudioDeviceInfo>> AlsaDeviceEnumerator::list(types::Au
  3 [A4             ]: USB-Audio - AIR 192 4
                       M-Audio AIR 192 4 at usb-0000:01:00.0-1.2, high speed
 */
-Result<void> AlsaDeviceEnumerator::parseCardsFile(std::istream& cardsFile, std::vector<types::AudioDeviceInfo>& devices) const {
+Result<void> AlsaDeviceEnumerator::parseCardsFile(std::istream& cardsFile,
+                                                  std::vector<types::AudioDeviceInfo>& devices) const {
     std::regex lineRegex(R"(^\s(\d+)\s\[(\S+)\s*\]:\s+(\S+)\s+-\s+(.+)$)");
     std::regex longnameRegex(R"(^\s+(.+)$)");
 
@@ -125,7 +123,6 @@ Result<void> AlsaDeviceEnumerator::parseCardsFile(std::istream& cardsFile, std::
     return {};
 }
 
-
 /* devices:
   2: [ 0- 0]: digital audio playback
   3: [ 0]   : control
@@ -139,7 +136,8 @@ Result<void> AlsaDeviceEnumerator::parseCardsFile(std::istream& cardsFile, std::
  33:        : timer
 */
 
-Result<void> AlsaDeviceEnumerator::parseDevicesFile(std::istream& devicesFile, std::vector<types::AudioDeviceInfo>& devices) const {
+Result<void> AlsaDeviceEnumerator::parseDevicesFile(std::istream& devicesFile,
+                                                    std::vector<types::AudioDeviceInfo>& devices) const {
     std::regex devicesRegex(R"(^\s+\d+:\s+\[\s*(.+)\-\s+(.+)\]\:\s+(.+)$)");
     std::string playbackId{"digital audio playback"};
     std::string captureId{"digital audio capture"};
@@ -177,23 +175,28 @@ Result<void> AlsaDeviceEnumerator::parseDevicesFile(std::istream& devicesFile, s
     return {};
 }
 
-Result<types::AudioDeviceInfo::DeviceFormat> AlsaDeviceEnumerator::getDeviceFormat(const types::AudioDeviceInfo& deviceInfo) const {
-    auto params = AlsaFacade::pcmParamsGet(deviceInfo.cardId, deviceInfo.deviceId, alsa_utils::toAlsaFlag(deviceInfo.type));
+Result<types::AudioDeviceInfo::DeviceFormat> AlsaDeviceEnumerator::getDeviceFormat(
+    const types::AudioDeviceInfo& deviceInfo) const {
+    auto params =
+        AlsaFacade::pcmParamsGet(deviceInfo.cardId, deviceInfo.deviceId, alsa_utils::toAlsaFlag(deviceInfo.type));
     if (!params) {
         return std::unexpected("Failed to get PCM parameters");
     }
 
     auto sampleFormat = types::AudioDeviceInfo::DeviceFormat::kFormatInvalid;
-    std::vector<std::pair<AlsaFacade::PcmFormat, const char*>> formatMap = {
-        {AlsaFacade::kFormatS16LE, "16-bit signed little-endian"},
-        {AlsaFacade::kFormatS32LE, "32-bit signed little-endian"}
-    };
+    std::vector<std::pair<AlsaFacade::PcmFormat, auto>> formatMap = {
+        {AlsaFacade::kFormatS16LE,
+         types::AudioDeviceInfo::to_string(types::AudioDeviceInfo::DeviceFormat::kFormatS16LE)},
+        {AlsaFacade::kFormatS32LE,
+         types::AudioDeviceInfo::to_string(types::AudioDeviceInfo::DeviceFormat::kFormatS32LE)}};
 
     for (const auto& [pcmTestFormat, formatStr] : formatMap) {
         auto testResult = AlsaFacade::pcmTestFormat(params, pcmTestFormat);
         if (testResult <= 0) {
-            spdlog::warn(
-                "PCM format {} is not supported for card {}, device {}", formatStr, deviceInfo.cardId, deviceInfo.deviceId);
+            spdlog::warn("PCM format {} is not supported for card {}, device {}",
+                         formatStr,
+                         deviceInfo.cardId,
+                         deviceInfo.deviceId);
             continue;
         }
         sampleFormat = static_cast<types::AudioDeviceInfo::DeviceFormat::SampleFormat>(pcmTestFormat);

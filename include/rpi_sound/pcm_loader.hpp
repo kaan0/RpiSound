@@ -21,8 +21,8 @@ public:
     // Load sound samples from the specified instrument folder
     bool load(std::string_view instrumentFolder) override;
 
-    // Get the loaded sound sample for the specified file path
-    const types::SoundSample& getSample(const std::string_view sampleName) const override;
+    // Returns nullptr if the sample is not found.
+    std::shared_ptr<const types::SoundSample> getSample(std::string_view sampleName) const override;
 
     // Get all loaded sample names
     std::vector<std::string> getSampleNames() const override;
@@ -34,6 +34,5 @@ private:
     // Load a sound sample from the specified file path
     bool parseSample(const std::filesystem::path& filePath, types::SoundSample& sample) const;
 
-    // Map to store loaded sound samples by file path
-    std::unordered_map<std::string, types::SoundSample> m_samples;
+    std::unordered_map<std::string, std::shared_ptr<types::SoundSample>> m_samples;
 };

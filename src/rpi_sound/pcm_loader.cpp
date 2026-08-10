@@ -20,7 +20,7 @@ bool PcmLoader::load(std::string_view instrumentFolder) {
             if (entry.is_regular_file() && entry.path().extension() == kFileExtension) {
                 types::SoundSample sample;
                 if (parseSample(entry.path().string(), sample)) {
-                    m_samples[entry.path().stem().string()] = std::move(sample);
+                    m_samples[entry.path().stem().string()] = std::make_shared<types::SoundSample>(std::move(sample));
                 } else {
                     spdlog::error("Failed to parse sound sample: {}", entry.path().string());
                 }
@@ -34,15 +34,12 @@ bool PcmLoader::load(std::string_view instrumentFolder) {
     return true;
 }
 
-const types::SoundSample& PcmLoader::getSample(const std::string_view sampleName) const {
-    // Check if the sample exists in the map
+std::shared_ptr<const types::SoundSample> PcmLoader::getSample(std::string_view sampleName) const {
     auto it = m_samples.find(std::string(sampleName));
     if (it != m_samples.end()) {
         return it->second;
     }
-
-    static const types::SoundSample empty_sample{};
-    return empty_sample;
+    return nullptr;
 }
 
 std::vector<std::string> PcmLoader::getSampleNames() const {

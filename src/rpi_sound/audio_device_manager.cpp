@@ -7,27 +7,22 @@
 #include "rpi_sound/audio_device.hpp"
 #include "rpi_sound/audio_device_manager.hpp"
 
-
 AudioDeviceManager::AudioDeviceManager(IAudioDeviceFactory& deviceFactory,
-                                    IDeviceEnumerator& deviceEnumerator,
-                                    IAudioDriver& audioDriver) : m_deviceFactory{deviceFactory},
-                                    m_deviceEnumerator{deviceEnumerator},
-                                    m_audioDriver{audioDriver} {
+                                       IDeviceEnumerator& deviceEnumerator,
+                                       IAudioDriver& audioDriver)
+    : m_deviceFactory{deviceFactory}, m_deviceEnumerator{deviceEnumerator}, m_audioDriver{audioDriver} {
 
-    // TODO: move paths to outside
-    auto playback_device_list_result = m_deviceEnumerator.list(types::AudioDeviceInfo::kPlayback, kCardsPath, kDevicesPath);
-    if (!playback_device_list_result) {
-        spdlog::warn("No PlayBack devices found. Warning: {}", playback_device_list_result.error());
+    if (auto r = m_deviceEnumerator.list(types::AudioDeviceInfo::kPlayback)) {
+        m_playbackDevices = std::move(r.value());
+    } else {
+        spdlog::warn("No playback devices found: {}", r.error());
     }
 
-    m_playbackDevices = std::move(playback_device_list_result.value());
-
-    auto capture_device_list_result = m_deviceEnumerator.list(types::AudioDeviceInfo::kCapture, kCardsPath, kDevicesPath);
-    if (!capture_device_list_result) {
-        spdlog::warn("No Capture devices found. Warning: {}", capture_device_list_result.error());
+    if (auto r = m_deviceEnumerator.list(types::AudioDeviceInfo::kCapture)) {
+        m_captureDevices = std::move(r.value());
+    } else {
+        spdlog::warn("No capture devices found: {}", r.error());
     }
-
-    m_captureDevices = std::move(capture_device_list_result.value());
 
     spdlog::info("Found {} playback and {} capture devices.", m_playbackDevices.size(), m_captureDevices.size());
 }
@@ -36,15 +31,38 @@ bool AudioDeviceManager::isInitialized() const {
     return !(m_captureDevices.empty() && m_playbackDevices.empty());
 }
 
-Result<std::vector<types::AudioDeviceInfo>> AudioDeviceManager::getAvailableDevices() const {
+Result<std::vector<types::AudioDeviceInfo>> AudioDeviceManager::getAvailableDevices(
+    types::AudioDeviceInfo::DeviceType type) const {
     if (m_captureDevices.empty() && m_playbackDevices.empty()) {
         return std::unexpected("No devices available.");
     }
 
     std::vector<types::AudioDeviceInfo> devices;
     devices.reserve(m_captureDevices.size() + m_playbackDevices.size());
-    devices.insert(devices.end(), m_captureDevices.begin(), m_captureDevices.end());
-    devices.insert(devices.end(), m_playbackDevices.begin(), m_playbackDevices.end());
+
+    auto append = [&devices](const std::vector<types::AudioDeviceInfo>& src) {
+        devices.insert(devices.end(), src.begin(), src.end());
+    };
+
+    switch (type) {
+        case types::AudioDeviceInfo::kPlayback:
+            append(m_playbackDevices);
+            break;
+        case types::AudioDeviceInfo::kCapture:
+            append(m_captureDevices);
+            break;
+        case types::AudioDeviceInfo::kAll:
+            append(m_captureDevices);
+            append(m_playbackDevices);
+            break;
+        default:
+            return std::unexpected("Invalid device type requested.");
+    }
+
+    if (devices.empty()) {
+        return std::unexpected("No devices available for the requested type: " +
+                               types::AudioDeviceInfo::to_string(type));
+    }
 
     return devices;
 }
@@ -81,5 +99,7 @@ void AudioDeviceManager::closeDevice() noexcept {
 }
 
 bool AudioDeviceManager::isDeviceOpen() const {
-    return m_currentDevice && m_currentDevice->isOpen();
+    if (!m_currentDevice) return false;
+    auto r = m_currentDevice->isOpen();
+    return r.has_value() && r.value();
 }

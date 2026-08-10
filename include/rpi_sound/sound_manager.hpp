@@ -24,9 +24,11 @@ public:
 
     bool initialize() override;
 
-    std::vector<types::AudioDeviceInfo> getAvailableAudioDevices() const override;
+    std::vector<types::AudioDeviceInfo> getAvailableAudioDevices(
+        types::AudioDeviceInfo::DeviceType type) const override;
 
-    std::vector<std::string> getAvailableAudioDeviceDescriptions() const override;
+    std::vector<std::string> getAvailableAudioDeviceDescriptions(
+        types::AudioDeviceInfo::DeviceType type) const override;
 
     std::vector<std::string> getAvailableSamples() const override { return m_soundLoader->getSampleNames(); }
 

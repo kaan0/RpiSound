@@ -1,8 +1,8 @@
 #pragma once
 
 #include "interfaces/iaudio_device_factory.hpp"
-#include "interfaces/idevice_enumerator.hpp"
 #include "interfaces/iaudio_driver.hpp"
+#include "interfaces/idevice_enumerator.hpp"
 
 #include "types/audio_device_info.hpp"
 
@@ -12,7 +12,8 @@ public:
     virtual bool isInitialized() const = 0;
 
     // Get a list of available audio devices
-    virtual Result<std::vector<types::AudioDeviceInfo>> getAvailableDevices() const = 0;
+    virtual Result<std::vector<types::AudioDeviceInfo>> getAvailableDevices(
+        types::AudioDeviceInfo::DeviceType type) const = 0;
 
     // Get the current audio device
     virtual Result<std::shared_ptr<IAudioDevice>> getDevice() const = 0;

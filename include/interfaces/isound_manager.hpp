@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
 class ISoundManager {
 public:
@@ -11,9 +12,11 @@ public:
 
     virtual bool initialize() = 0;
 
-    virtual std::vector<types::AudioDeviceInfo> getAvailableAudioDevices() const = 0;
+    virtual std::vector<types::AudioDeviceInfo> getAvailableAudioDevices(
+        types::AudioDeviceInfo::DeviceType type) const = 0;
 
-    virtual std::vector<std::string> getAvailableAudioDeviceDescriptions() const = 0;
+    virtual std::vector<std::string> getAvailableAudioDeviceDescriptions(
+        types::AudioDeviceInfo::DeviceType type) const = 0;
 
     virtual bool selectAudioDevice(const types::AudioDeviceInfo& deviceInfo) = 0;
 

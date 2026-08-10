@@ -5,11 +5,17 @@
 
 #include "rpi_sound/audio_device.hpp"
 
-AudioDevice::AudioDevice(IAudioDriver& audioDriver, const types::AudioDeviceInfo& deviceInfo) : m_audioDriver{audioDriver}, m_deviceInfo{deviceInfo} {}
+static bool isOpenValue(IAudioDevice* device) {
+    if (!device) return false;
+    auto r = device->isOpen();
+    return r.has_value() && r.value();
+}
+
+AudioDevice::AudioDevice(IAudioDriver& audioDriver, const types::AudioDeviceInfo& deviceInfo)
+    : m_audioDriver{audioDriver}, m_deviceInfo{deviceInfo} {}
 
 AudioDevice::~AudioDevice() {
-    auto is_open = isOpen();
-    if (is_open && is_open.value()) {
+    if (isOpenValue(this)) {
         close();
     }
 }
@@ -32,13 +38,13 @@ AudioDevice& AudioDevice::operator=(AudioDevice&& other) noexcept {
 
         other.m_driverHandle = nullptr;
         other.m_deviceInfo = {};
-
     }
     return *this;
 }
 
 Result<void> AudioDevice::open() {
-    if (isOpen()) {
+    auto r = isOpen();
+    if (r.has_value() && r.value()) {
         spdlog::warn("Audio device is already open.");
         return std::unexpected("Audio device is already open.");
     }
@@ -54,7 +60,8 @@ Result<void> AudioDevice::open() {
 }
 
 Result<void> AudioDevice::close() noexcept {
-    if (!isOpen()) {
+    auto r = isOpen();
+    if (!r.has_value() || !r.value()) {
         spdlog::warn("Audio device is not open. Nothing to close.");
         return std::unexpected("Audio device is not open. Nothing to close.");
     }
@@ -89,7 +96,7 @@ Result<size_t> AudioDevice::write(const types::audio_span_t& audioData) {
 }
 
 Result<size_t> AudioDevice::read(types::audio_span_mut_t& audioBuffer, size_t framesToRead) {
-    return false;
+    return std::unexpected("Not implemented");
 }
 
 Result<size_t> AudioDevice::getBufferSize() const {
